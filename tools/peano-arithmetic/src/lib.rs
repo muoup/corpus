@@ -1,3 +1,5 @@
 pub mod syntax;
 pub mod parsing;
-pub mod generation;
+
+#[cfg(test)]
+mod tests;

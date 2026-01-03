@@ -1,27 +1,20 @@
 use core::fmt;
 
 use corpus_core::nodes::{HashNode, HashNodeInner, Hashing};
+use corpus_classical_logic::{BinaryTruth, ClassicalOperator};
+use corpus_core::expression::{DomainContent, DomainExpression, LogicalExpression};
 
-pub enum SumNode {
-    Proposition(Proposition),
-    Expression(Expression),
-    Term(Term),
+pub type PeanoExpression = DomainExpression<BinaryTruth, PeanoContent>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PeanoContent {
+    Equals(HashNode<ArithmeticExpression>, HashNode<ArithmeticExpression>),
+    Logical(LogicalExpression<BinaryTruth, ClassicalOperator>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Proposition {
-    And(HashNode<Proposition>, HashNode<Proposition>),
-    Or(HashNode<Proposition>, HashNode<Proposition>),
-    Implies(HashNode<Proposition>, HashNode<Proposition>),
-    Not(HashNode<Proposition>),
-    Forall(HashNode<Proposition>),
-    Exists(HashNode<Proposition>),
-    Equals(HashNode<Expression>, HashNode<Expression>),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Expression {
-    Add(HashNode<Expression>, HashNode<Expression>),
+pub enum ArithmeticExpression {
+    Add(HashNode<ArithmeticExpression>, HashNode<ArithmeticExpression>),
     Term(Term),
 }
 
@@ -32,25 +25,35 @@ pub enum Term {
     DeBruijn(HashNode<u32>),
 }
 
-impl fmt::Display for Proposition {
+impl fmt::Display for PeanoContent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Proposition::And(left, right) => write!(f, "({} ∧ {})", left, right),
-            Proposition::Or(left, right) => write!(f, "({} ∨ {})", left, right),
-            Proposition::Implies(left, right) => write!(f, "({} -> {})", left, right),
-            Proposition::Not(inner) => write!(f, "¬{}", inner),
-            Proposition::Forall(inner) => write!(f, "∀({})", inner),
-            Proposition::Exists(inner) => write!(f, "∃({})", inner),
-            Proposition::Equals(left, right) => write!(f, "{} = {}", left, right),
+            PeanoContent::Equals(left, right) => write!(f, "{} = {}", left, right),
+            PeanoContent::Logical(expr) => write!(f, "{}", expr),
         }
     }
 }
 
-impl fmt::Display for Expression {
+impl DomainContent<BinaryTruth> for PeanoContent {
+    type Operator = ClassicalOperator;
+    
+    fn evaluate(&self) -> Option<BinaryTruth> {
+        match self {
+            PeanoContent::Equals(_, _) => None, // Cannot evaluate equality without more context
+            PeanoContent::Logical(expr) => Some(expr.evaluate()),
+        }
+    }
+    
+    fn truth_value(&self) -> Option<BinaryTruth> {
+        self.evaluate()
+    }
+}
+
+impl fmt::Display for ArithmeticExpression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Expression::Add(left, right) => write!(f, "({} + {})", left, right),
-            Expression::Term(term) => write!(f, "{}", term),
+            ArithmeticExpression::Add(left, right) => write!(f, "({} + {})", left, right),
+            ArithmeticExpression::Term(term) => write!(f, "{}", term),
         }
     }
 }
@@ -65,44 +68,39 @@ impl fmt::Display for Term {
     }
 }
 
-impl HashNodeInner for Proposition {
+impl HashNodeInner for PeanoContent {
     fn hash(&self) -> u64 {
         match self {
-            Proposition::And(left, right) => Hashing::root_hash(1, &[left.hash, right.hash]),
-            Proposition::Or(left, right) => Hashing::root_hash(2, &[left.hash, right.hash]),
-            Proposition::Implies(left, right) => Hashing::root_hash(3, &[left.hash, right.hash]),
-            Proposition::Not(inner) => Hashing::root_hash(4, &[inner.hash]),
-            Proposition::Forall(inner) => Hashing::root_hash(5, &[inner.hash]),
-            Proposition::Exists(inner) => Hashing::root_hash(6, &[inner.hash]),
-            Proposition::Equals(left, right) => Hashing::root_hash(7, &[left.hash, right.hash]),
+            PeanoContent::Equals(left, right) => {
+                let hashes = vec![left.hash, right.hash];
+                Hashing::root_hash(1, &hashes)
+            }
+            PeanoContent::Logical(expr) => {
+                Hashing::root_hash(2, &[expr.hash()])
+            }
         }
     }
     
     fn size(&self) -> u64 {
         match self {
-            Proposition::And(left, right) => 1 + left.size() + right.size(),
-            Proposition::Or(left, right) => 1 + left.size() + right.size(),
-            Proposition::Implies(left, right) => 1 + left.size() + right.size(),
-            Proposition::Not(inner) => 1 + inner.size(),
-            Proposition::Forall(inner) => 1 + inner.size(),
-            Proposition::Exists(inner) => 1 + inner.size(),
-            Proposition::Equals(left, right) => 1 + left.size() + right.size(),
+            PeanoContent::Equals(left, right) => 1 + left.size() + right.size(),
+            PeanoContent::Logical(expr) => 1 + expr.size(),
         }
     }
 }
 
-impl HashNodeInner for Expression {
+impl HashNodeInner for ArithmeticExpression {
     fn hash(&self) -> u64 {
         match self {
-            Expression::Add(left, right) => Hashing::root_hash(8, &[left.hash, right.hash]),
-            Expression::Term(term) => Hashing::root_hash(9, &[term.hash()]),
+            ArithmeticExpression::Add(left, right) => Hashing::root_hash(8, &[left.hash, right.hash]),
+            ArithmeticExpression::Term(term) => Hashing::root_hash(9, &[term.hash()]),
         }
     }
     
     fn size(&self) -> u64 {
         match self {
-            Expression::Add(left, right) => 1 + left.size() + right.size(),
-            Expression::Term(term) => 1 + term.size(),
+            ArithmeticExpression::Add(left, right) => 1 + left.size() + right.size(),
+            ArithmeticExpression::Term(term) => 1 + term.size(),
         }
     }
 }
@@ -125,20 +123,3 @@ impl HashNodeInner for Term {
     }
 }
 
-impl HashNodeInner for SumNode {
-    fn hash(&self) -> u64 {
-        match self {
-            SumNode::Proposition(p) => p.hash(),
-            SumNode::Expression(e) => e.hash(),
-            SumNode::Term(t) => t.hash(),
-        }
-    }
-    
-    fn size(&self) -> u64 {
-        match self {
-            SumNode::Proposition(p) => p.size(),
-            SumNode::Expression(e) => e.size(),
-            SumNode::Term(t) => t.size(),
-        }
-    }
-}

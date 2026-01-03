@@ -1,8 +1,10 @@
 use std::{iter::Peekable, str::Chars};
 
 use corpus_core::nodes::{HashNode, NodeStorage};
+use corpus_classical_logic::{BinaryTruth, ClassicalOperator};
+use corpus_core::expression::LogicalExpression;
 
-use crate::syntax::{Expression, Proposition, Term};
+use crate::syntax::{ArithmeticExpression, PeanoContent, PeanoExpression, Term};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
@@ -137,9 +139,11 @@ impl<'a> Iterator for Lexer<'a> {
 
 pub struct Parser<'a> {
     tokens: Peekable<Lexer<'a>>,
-    proposition_store: NodeStorage<Proposition>,
-    expression_store: NodeStorage<Expression>,
+    peano_store: NodeStorage<PeanoExpression>,
+    expression_store: NodeStorage<ArithmeticExpression>,
     term_store: NodeStorage<Term>,
+    logical_store: NodeStorage<LogicalExpression<BinaryTruth, ClassicalOperator>>,
+    content_store: NodeStorage<PeanoContent>,
     u64_store: NodeStorage<u64>,
     u32_store: NodeStorage<u32>,
 }
@@ -148,9 +152,11 @@ impl<'a> Parser<'a> {
     pub fn new(input: &'a str) -> Self {
         Self {
             tokens: Lexer::new(input).peekable(),
-            proposition_store: NodeStorage::new(),
+            peano_store: NodeStorage::new(),
             expression_store: NodeStorage::new(),
             term_store: NodeStorage::new(),
+            logical_store: NodeStorage::new(),
+            content_store: NodeStorage::new(),
             u64_store: NodeStorage::new(),
             u32_store: NodeStorage::new(),
         }
@@ -177,54 +183,84 @@ impl<'a> Parser<'a> {
         Ok(result)
     }
 
-    pub fn parse_proposition(&mut self) -> Result<HashNode<Proposition>, String> {
+    pub fn parse_proposition(&mut self) -> Result<HashNode<PeanoExpression>, String> {
         let token = self.tokens.next().ok_or("Unexpected EOF expecting Proposition")?;
         match token {
             Token::And => {
                 let left = self.parse_parenthesized(Self::parse_proposition)?;
                 let right = self.parse_parenthesized(Self::parse_proposition)?;
-                let prop = Proposition::And(left, right);
-                Ok(HashNode::from_store(prop, &self.proposition_store))
+                let logical_expr = LogicalExpression::compound(
+                    ClassicalOperator::And,
+                    vec![left.value.as_logical().unwrap().clone().into(), right.value.as_logical().unwrap().clone().into()]
+                );
+                let content = PeanoContent::Logical(logical_expr);
+                let peano_expr = PeanoExpression::domain(content);
+                Ok(HashNode::from_store(peano_expr, &self.peano_store))
             }
             Token::Or => {
                 let left = self.parse_parenthesized(Self::parse_proposition)?;
                 let right = self.parse_parenthesized(Self::parse_proposition)?;
-                let prop = Proposition::Or(left, right);
-                Ok(HashNode::from_store(prop, &self.proposition_store))
+                let logical_expr = LogicalExpression::compound(
+                    ClassicalOperator::Or,
+                    vec![left.value.as_logical().unwrap().clone().into(), right.value.as_logical().unwrap().clone().into()]
+                );
+                let content = PeanoContent::Logical(logical_expr);
+                let peano_expr = PeanoExpression::domain(content);
+                Ok(HashNode::from_store(peano_expr, &self.peano_store))
             }
             Token::Implies => {
                 let left = self.parse_parenthesized(Self::parse_proposition)?;
                 let right = self.parse_parenthesized(Self::parse_proposition)?;
-                let prop = Proposition::Implies(left, right);
-                Ok(HashNode::from_store(prop, &self.proposition_store))
+                let logical_expr = LogicalExpression::compound(
+                    ClassicalOperator::Implies,
+                    vec![left.value.as_logical().unwrap().clone().into(), right.value.as_logical().unwrap().clone().into()]
+                );
+                let content = PeanoContent::Logical(logical_expr);
+                let peano_expr = PeanoExpression::domain(content);
+                Ok(HashNode::from_store(peano_expr, &self.peano_store))
             }
             Token::Not => {
                 let inner = self.parse_parenthesized(Self::parse_proposition)?;
-                let prop = Proposition::Not(inner);
-                Ok(HashNode::from_store(prop, &self.proposition_store))
+                let logical_expr = LogicalExpression::compound(
+                    ClassicalOperator::Not,
+                    vec![inner.value.as_logical().unwrap().clone().into()]
+                );
+                let content = PeanoContent::Logical(logical_expr);
+                let peano_expr = PeanoExpression::domain(content);
+                Ok(HashNode::from_store(peano_expr, &self.peano_store))
             }
             Token::Forall => {
-                // Forall (<prop>)
                 let inner = self.parse_parenthesized(Self::parse_proposition)?;
-                let prop = Proposition::Forall(inner);
-                Ok(HashNode::from_store(prop, &self.proposition_store))
+                let logical_expr = LogicalExpression::compound(
+                    ClassicalOperator::Forall,
+                    vec![inner.value.as_logical().unwrap().clone().into()]
+                );
+                let content = PeanoContent::Logical(logical_expr);
+                let peano_expr = PeanoExpression::domain(content);
+                Ok(HashNode::from_store(peano_expr, &self.peano_store))
             }
             Token::Exists => {
                 let inner = self.parse_parenthesized(Self::parse_proposition)?;
-                let prop = Proposition::Exists(inner);
-                Ok(HashNode::from_store(prop, &self.proposition_store))
+                let logical_expr = LogicalExpression::compound(
+                    ClassicalOperator::Exists,
+                    vec![inner.value.as_logical().unwrap().clone().into()]
+                );
+                let content = PeanoContent::Logical(logical_expr);
+                let peano_expr = PeanoExpression::domain(content);
+                Ok(HashNode::from_store(peano_expr, &self.peano_store))
             }
             Token::Eq => {
                 let left = self.parse_parenthesized(Self::parse_expression)?;
                 let right = self.parse_parenthesized(Self::parse_expression)?;
-                let prop = Proposition::Equals(left, right);
-                Ok(HashNode::from_store(prop, &self.proposition_store))
+                let content = PeanoContent::Equals(left, right);
+                let peano_expr = PeanoExpression::domain(content);
+                Ok(HashNode::from_store(peano_expr, &self.peano_store))
             }
             _ => Err(format!("Unexpected token {:?} for start of Proposition", token)),
         }
     }
 
-    pub fn parse_expression(&mut self) -> Result<HashNode<Expression>, String> {
+    pub fn parse_expression(&mut self) -> Result<HashNode<ArithmeticExpression>, String> {
         // Peek to decide if it's an Op (Plus) or a Term start
         let token = self.tokens.peek().cloned().ok_or("Unexpected EOF expecting Expression")?;
         
@@ -233,13 +269,13 @@ impl<'a> Parser<'a> {
                 self.tokens.next(); // consume PLUS
                 let left = self.parse_parenthesized(Self::parse_expression)?;
                 let right = self.parse_parenthesized(Self::parse_expression)?;
-                let expr = Expression::Add(left, right);
+                let expr = ArithmeticExpression::Add(left, right);
                 Ok(HashNode::from_store(expr, &self.expression_store))
             }
             // S, Number, DeBruijn are Term starters
             Token::Successor | Token::Number(_) | Token::DeBruijn(_) => {
                 let term = self.parse_term()?;
-                let expr = Expression::Term((*term.value).clone());
+                let expr = ArithmeticExpression::Term((*term.value).clone());
                 Ok(HashNode::from_store(expr, &self.expression_store))
             }
             _ => Err(format!("Unexpected token {:?} for start of Expression", token)),
@@ -271,11 +307,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn store_stats(&self) -> (usize, usize, usize, usize, usize) {
+    pub fn store_stats(&self) -> (usize, usize, usize, usize, usize, usize) {
         (
-            self.proposition_store.len(),
+            self.peano_store.len(),
             self.expression_store.len(),
             self.term_store.len(),
+            self.logical_store.len(),
             self.u64_store.len(),
             self.u32_store.len(),
         )

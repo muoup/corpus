@@ -1,0 +1,10 @@
+[package]
+name = "corpus-classical-logic"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+corpus-core = { path = "../core" }
+
+[dev-dependencies]
+corpus-core = { path = "../core" }

@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 corpus-core = { path = "../../crates/core" }
 corpus-rewriting = { path = "../../crates/rewriting" }
+corpus-classical-logic = { path = "../../crates/classical-logic" }
