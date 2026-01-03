@@ -1,8 +1,8 @@
 use std::{iter::Peekable, str::Chars};
 
-use corpus_core::nodes::{HashNode, NodeStorage};
 use corpus_classical_logic::{BinaryTruth, ClassicalOperator};
 use corpus_core::expression::LogicalExpression;
+use corpus_core::nodes::{HashNode, NodeStorage};
 
 use crate::syntax::{ArithmeticExpression, PeanoContent, PeanoExpression, Term};
 
@@ -82,20 +82,44 @@ impl<'a> Lexer<'a> {
             self.chars.next();
             return Some(Token::RParen);
         }
-        
+
         // Symbols
         match *c {
-            '∧' => { self.chars.next(); return Some(Token::And); }
-            '∨' => { self.chars.next(); return Some(Token::Or); }
-            '→' => { self.chars.next(); return Some(Token::Implies); }
-            '¬' => { self.chars.next(); return Some(Token::Not); }
-            '∀' => { self.chars.next(); return Some(Token::Forall); }
-            '∃' => { self.chars.next(); return Some(Token::Exists); }
-            '=' => { self.chars.next(); return Some(Token::Eq); }
-            '+' => { self.chars.next(); return Some(Token::Plus); }
+            '∧' => {
+                self.chars.next();
+                return Some(Token::And);
+            }
+            '∨' => {
+                self.chars.next();
+                return Some(Token::Or);
+            }
+            '→' => {
+                self.chars.next();
+                return Some(Token::Implies);
+            }
+            '¬' => {
+                self.chars.next();
+                return Some(Token::Not);
+            }
+            '∀' => {
+                self.chars.next();
+                return Some(Token::Forall);
+            }
+            '∃' => {
+                self.chars.next();
+                return Some(Token::Exists);
+            }
+            '=' => {
+                self.chars.next();
+                return Some(Token::Eq);
+            }
+            '+' => {
+                self.chars.next();
+                return Some(Token::Plus);
+            }
             _ => {}
         }
-        
+
         // Multi-char symbols or keywords
         // Simple heuristic: read alphanumeric chars
         let mut s = String::new();
@@ -117,7 +141,7 @@ impl<'a> Lexer<'a> {
             "EQ" => Some(Token::Eq),
             "PLUS" => Some(Token::Plus),
             "S" => Some(Token::Successor), // 'S' is a keyword for Successor
-            _ => None, // parsing error or empty
+            _ => None,                     // parsing error or empty
         }
     }
 }
@@ -184,14 +208,20 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_proposition(&mut self) -> Result<HashNode<PeanoExpression>, String> {
-        let token = self.tokens.next().ok_or("Unexpected EOF expecting Proposition")?;
+        let token = self
+            .tokens
+            .next()
+            .ok_or("Unexpected EOF expecting Proposition")?;
         match token {
             Token::And => {
                 let left = self.parse_parenthesized(Self::parse_proposition)?;
                 let right = self.parse_parenthesized(Self::parse_proposition)?;
                 let logical_expr = LogicalExpression::compound(
                     ClassicalOperator::And,
-                    vec![left.value.as_logical().unwrap().clone().into(), right.value.as_logical().unwrap().clone().into()]
+                    vec![
+                        left.value.as_logical().unwrap().clone().into(),
+                        right.value.as_logical().unwrap().clone().into(),
+                    ],
                 );
                 let content = PeanoContent::Logical(logical_expr);
                 let peano_expr = PeanoExpression::domain(content);
@@ -202,7 +232,10 @@ impl<'a> Parser<'a> {
                 let right = self.parse_parenthesized(Self::parse_proposition)?;
                 let logical_expr = LogicalExpression::compound(
                     ClassicalOperator::Or,
-                    vec![left.value.as_logical().unwrap().clone().into(), right.value.as_logical().unwrap().clone().into()]
+                    vec![
+                        left.value.as_logical().unwrap().clone().into(),
+                        right.value.as_logical().unwrap().clone().into(),
+                    ],
                 );
                 let content = PeanoContent::Logical(logical_expr);
                 let peano_expr = PeanoExpression::domain(content);
@@ -213,7 +246,10 @@ impl<'a> Parser<'a> {
                 let right = self.parse_parenthesized(Self::parse_proposition)?;
                 let logical_expr = LogicalExpression::compound(
                     ClassicalOperator::Implies,
-                    vec![left.value.as_logical().unwrap().clone().into(), right.value.as_logical().unwrap().clone().into()]
+                    vec![
+                        left.value.as_logical().unwrap().clone().into(),
+                        right.value.as_logical().unwrap().clone().into(),
+                    ],
                 );
                 let content = PeanoContent::Logical(logical_expr);
                 let peano_expr = PeanoExpression::domain(content);
@@ -223,7 +259,7 @@ impl<'a> Parser<'a> {
                 let inner = self.parse_parenthesized(Self::parse_proposition)?;
                 let logical_expr = LogicalExpression::compound(
                     ClassicalOperator::Not,
-                    vec![inner.value.as_logical().unwrap().clone().into()]
+                    vec![inner.value.as_logical().unwrap().clone().into()],
                 );
                 let content = PeanoContent::Logical(logical_expr);
                 let peano_expr = PeanoExpression::domain(content);
@@ -233,7 +269,7 @@ impl<'a> Parser<'a> {
                 let inner = self.parse_parenthesized(Self::parse_proposition)?;
                 let logical_expr = LogicalExpression::compound(
                     ClassicalOperator::Forall,
-                    vec![inner.value.as_logical().unwrap().clone().into()]
+                    vec![inner.value.as_logical().unwrap().clone().into()],
                 );
                 let content = PeanoContent::Logical(logical_expr);
                 let peano_expr = PeanoExpression::domain(content);
@@ -243,7 +279,7 @@ impl<'a> Parser<'a> {
                 let inner = self.parse_parenthesized(Self::parse_proposition)?;
                 let logical_expr = LogicalExpression::compound(
                     ClassicalOperator::Exists,
-                    vec![inner.value.as_logical().unwrap().clone().into()]
+                    vec![inner.value.as_logical().unwrap().clone().into()],
                 );
                 let content = PeanoContent::Logical(logical_expr);
                 let peano_expr = PeanoExpression::domain(content);
@@ -256,14 +292,21 @@ impl<'a> Parser<'a> {
                 let peano_expr = PeanoExpression::domain(content);
                 Ok(HashNode::from_store(peano_expr, &self.peano_store))
             }
-            _ => Err(format!("Unexpected token {:?} for start of Proposition", token)),
+            _ => Err(format!(
+                "Unexpected token {:?} for start of Proposition",
+                token
+            )),
         }
     }
 
     pub fn parse_expression(&mut self) -> Result<HashNode<ArithmeticExpression>, String> {
         // Peek to decide if it's an Op (Plus) or a Term start
-        let token = self.tokens.peek().cloned().ok_or("Unexpected EOF expecting Expression")?;
-        
+        let token = self
+            .tokens
+            .peek()
+            .cloned()
+            .ok_or("Unexpected EOF expecting Expression")?;
+
         match token {
             Token::Plus => {
                 self.tokens.next(); // consume PLUS
@@ -278,7 +321,10 @@ impl<'a> Parser<'a> {
                 let expr = ArithmeticExpression::Term((*term.value).clone());
                 Ok(HashNode::from_store(expr, &self.expression_store))
             }
-            _ => Err(format!("Unexpected token {:?} for start of Expression", token)),
+            _ => Err(format!(
+                "Unexpected token {:?} for start of Expression",
+                token
+            )),
         }
     }
 

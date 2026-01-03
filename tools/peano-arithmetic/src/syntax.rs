@@ -1,20 +1,26 @@
 use core::fmt;
 
-use corpus_core::nodes::{HashNode, HashNodeInner, Hashing};
 use corpus_classical_logic::{BinaryTruth, ClassicalOperator};
 use corpus_core::expression::{DomainContent, DomainExpression, LogicalExpression};
+use corpus_core::nodes::{HashNode, HashNodeInner, Hashing};
 
 pub type PeanoExpression = DomainExpression<BinaryTruth, PeanoContent>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PeanoContent {
-    Equals(HashNode<ArithmeticExpression>, HashNode<ArithmeticExpression>),
+    Equals(
+        HashNode<ArithmeticExpression>,
+        HashNode<ArithmeticExpression>,
+    ),
     Logical(LogicalExpression<BinaryTruth, ClassicalOperator>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ArithmeticExpression {
-    Add(HashNode<ArithmeticExpression>, HashNode<ArithmeticExpression>),
+    Add(
+        HashNode<ArithmeticExpression>,
+        HashNode<ArithmeticExpression>,
+    ),
     Term(Term),
 }
 
@@ -36,14 +42,14 @@ impl fmt::Display for PeanoContent {
 
 impl DomainContent<BinaryTruth> for PeanoContent {
     type Operator = ClassicalOperator;
-    
+
     fn evaluate(&self) -> Option<BinaryTruth> {
         match self {
             PeanoContent::Equals(_, _) => None, // Cannot evaluate equality without more context
             PeanoContent::Logical(expr) => Some(expr.evaluate()),
         }
     }
-    
+
     fn truth_value(&self) -> Option<BinaryTruth> {
         self.evaluate()
     }
@@ -75,12 +81,10 @@ impl HashNodeInner for PeanoContent {
                 let hashes = vec![left.hash, right.hash];
                 Hashing::root_hash(1, &hashes)
             }
-            PeanoContent::Logical(expr) => {
-                Hashing::root_hash(2, &[expr.hash()])
-            }
+            PeanoContent::Logical(expr) => Hashing::root_hash(2, &[expr.hash()]),
         }
     }
-    
+
     fn size(&self) -> u64 {
         match self {
             PeanoContent::Equals(left, right) => 1 + left.size() + right.size(),
@@ -92,11 +96,13 @@ impl HashNodeInner for PeanoContent {
 impl HashNodeInner for ArithmeticExpression {
     fn hash(&self) -> u64 {
         match self {
-            ArithmeticExpression::Add(left, right) => Hashing::root_hash(8, &[left.hash, right.hash]),
+            ArithmeticExpression::Add(left, right) => {
+                Hashing::root_hash(8, &[left.hash, right.hash])
+            }
             ArithmeticExpression::Term(term) => Hashing::root_hash(9, &[term.hash()]),
         }
     }
-    
+
     fn size(&self) -> u64 {
         match self {
             ArithmeticExpression::Add(left, right) => 1 + left.size() + right.size(),
@@ -113,7 +119,7 @@ impl HashNodeInner for Term {
             Term::DeBruijn(idx) => Hashing::root_hash(12, &[*idx.value as u64]),
         }
     }
-    
+
     fn size(&self) -> u64 {
         match self {
             Term::Successor(inner) => 1 + inner.size(),
@@ -122,4 +128,3 @@ impl HashNodeInner for Term {
         }
     }
 }
-

@@ -164,7 +164,7 @@ impl HashNodeInner for u64 {
     fn hash(&self) -> u64 {
         *self
     }
-    
+
     fn size(&self) -> u64 {
         1
     }
@@ -174,7 +174,7 @@ impl HashNodeInner for u32 {
     fn hash(&self) -> u64 {
         *self as u64
     }
-    
+
     fn size(&self) -> u64 {
         1
     }

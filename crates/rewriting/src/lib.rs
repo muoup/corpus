@@ -21,7 +21,7 @@ impl<Node: HashNodeInner> Rewriter<Node> {
     pub const fn new(rules: Vec<RewriteRule<Node>>) -> Self {
         Self { rules }
     }
-    
+
     pub fn try_apply_rules<'a>(&self, node: &'a [Node]) -> RewriteResult<'a, Node> {
         RewriteResult {
             input: node,
@@ -38,9 +38,11 @@ impl<Node: HashNodeInner> RewriteResult<'_, Node> {
     pub const fn get_allowed_rewrites(&self) -> &Vec<RewriteStep<Node>> {
         &self.allowed_rewrites
     }
-    
+
     pub fn apply_rewrite(&self, index: usize) -> Option<HashNode<Node>> {
-        self.allowed_rewrites.get(index).map(|step| step.apply(self.input))
+        self.allowed_rewrites
+            .get(index)
+            .map(|step| step.apply(self.input))
     }
 }
 
@@ -64,7 +66,7 @@ impl<Node: HashNodeInner> RewriteStep<Node> {
             process: Box::new(process),
         }
     }
-    
+
     pub fn apply(&self, input: &[Node]) -> HashNode<Node> {
         (self.process)(input)
     }
