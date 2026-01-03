@@ -1,0 +1,7 @@
+[package]
+name = "peano-arithmetic"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+corpus-core = { path = "../../crates/core" }

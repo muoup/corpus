@@ -1,6 +1,8 @@
-use crate::ast::{Expression, HashNode, NodeStore, Proposition, Term};
-use std::iter::Peekable;
-use std::str::Chars;
+use std::{iter::Peekable, str::Chars};
+
+use corpus_core::nodes::{HashNode, NodeStorage};
+
+use crate::syntax::{Expression, Proposition, Term};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
@@ -135,22 +137,22 @@ impl<'a> Iterator for Lexer<'a> {
 
 pub struct Parser<'a> {
     tokens: Peekable<Lexer<'a>>,
-    proposition_store: NodeStore<Proposition>,
-    expression_store: NodeStore<Expression>,
-    term_store: NodeStore<Term>,
-    u64_store: NodeStore<u64>,
-    u32_store: NodeStore<u32>,
+    proposition_store: NodeStorage<Proposition>,
+    expression_store: NodeStorage<Expression>,
+    term_store: NodeStorage<Term>,
+    u64_store: NodeStorage<u64>,
+    u32_store: NodeStorage<u32>,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(input: &'a str) -> Self {
         Self {
             tokens: Lexer::new(input).peekable(),
-            proposition_store: NodeStore::new(),
-            expression_store: NodeStore::new(),
-            term_store: NodeStore::new(),
-            u64_store: NodeStore::new(),
-            u32_store: NodeStore::new(),
+            proposition_store: NodeStorage::new(),
+            expression_store: NodeStorage::new(),
+            term_store: NodeStorage::new(),
+            u64_store: NodeStorage::new(),
+            u32_store: NodeStorage::new(),
         }
     }
 

@@ -3,5 +3,12 @@
 version = 4
 
 [[package]]
-name = "corpus"
+name = "corpus-core"
 version = "0.1.0"
+
+[[package]]
+name = "peano-arithmetic"
+version = "0.1.0"
+dependencies = [
+ "corpus-core",
+]

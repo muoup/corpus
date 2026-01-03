@@ -1,0 +1,8 @@
+[build]
+# Workspace-wide build configuration
+
+[alias]
+# Custom commands for common operations
+build-all = "build --workspace"
+test-all = "test --workspace"
+run-axiom = "run --package axiom-generator --bin axiom-generator"
