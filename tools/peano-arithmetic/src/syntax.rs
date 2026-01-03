@@ -1,6 +1,6 @@
 use core::fmt;
 
-use corpus_core::nodes::{HashNode, Hashable, Hashing};
+use corpus_core::nodes::{HashNode, HashNodeInner, Hashing};
 
 pub enum SumNode {
     Proposition(Proposition),
@@ -65,7 +65,7 @@ impl fmt::Display for Term {
     }
 }
 
-impl Hashable for Proposition {
+impl HashNodeInner for Proposition {
     fn hash(&self) -> u64 {
         match self {
             Proposition::And(left, right) => Hashing::root_hash(1, &[left.hash, right.hash]),
@@ -77,18 +77,37 @@ impl Hashable for Proposition {
             Proposition::Equals(left, right) => Hashing::root_hash(7, &[left.hash, right.hash]),
         }
     }
+    
+    fn size(&self) -> u64 {
+        match self {
+            Proposition::And(left, right) => 1 + left.size() + right.size(),
+            Proposition::Or(left, right) => 1 + left.size() + right.size(),
+            Proposition::Implies(left, right) => 1 + left.size() + right.size(),
+            Proposition::Not(inner) => 1 + inner.size(),
+            Proposition::Forall(inner) => 1 + inner.size(),
+            Proposition::Exists(inner) => 1 + inner.size(),
+            Proposition::Equals(left, right) => 1 + left.size() + right.size(),
+        }
+    }
 }
 
-impl Hashable for Expression {
+impl HashNodeInner for Expression {
     fn hash(&self) -> u64 {
         match self {
             Expression::Add(left, right) => Hashing::root_hash(8, &[left.hash, right.hash]),
             Expression::Term(term) => Hashing::root_hash(9, &[term.hash()]),
         }
     }
+    
+    fn size(&self) -> u64 {
+        match self {
+            Expression::Add(left, right) => 1 + left.size() + right.size(),
+            Expression::Term(term) => 1 + term.size(),
+        }
+    }
 }
 
-impl Hashable for Term {
+impl HashNodeInner for Term {
     fn hash(&self) -> u64 {
         match self {
             Term::Successor(inner) => Hashing::root_hash(10, &[inner.hash]),
@@ -96,14 +115,30 @@ impl Hashable for Term {
             Term::DeBruijn(idx) => Hashing::root_hash(12, &[*idx.value as u64]),
         }
     }
+    
+    fn size(&self) -> u64 {
+        match self {
+            Term::Successor(inner) => 1 + inner.size(),
+            Term::Number(_) => 1,
+            Term::DeBruijn(_) => 1,
+        }
+    }
 }
 
-impl Hashable for SumNode {
+impl HashNodeInner for SumNode {
     fn hash(&self) -> u64 {
         match self {
             SumNode::Proposition(p) => p.hash(),
             SumNode::Expression(e) => e.hash(),
             SumNode::Term(t) => t.hash(),
+        }
+    }
+    
+    fn size(&self) -> u64 {
+        match self {
+            SumNode::Proposition(p) => p.size(),
+            SumNode::Expression(e) => e.size(),
+            SumNode::Term(t) => t.size(),
         }
     }
 }

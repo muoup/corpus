@@ -7,8 +7,16 @@ name = "corpus-core"
 version = "0.1.0"
 
 [[package]]
-name = "peano-arithmetic"
-version = "0.1.0"
+name = "corpus-rewriting"
+version = "0.0.0"
 dependencies = [
  "corpus-core",
+]
+
+[[package]]
+name = "peano-arithmetic"
+version = "0.0.0"
+dependencies = [
+ "corpus-core",
+ "corpus-rewriting",
 ]

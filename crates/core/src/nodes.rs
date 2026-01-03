@@ -8,23 +8,24 @@ use std::{
 
 // --- Public Interface ---
 
-pub trait Hashable {
+pub trait HashNodeInner {
     fn hash(&self) -> u64;
+    fn size(&self) -> u64;
 }
 
 pub struct Hashing;
 
 #[derive(Debug)]
-pub struct HashNode<T: Hashable> {
+pub struct HashNode<T: HashNodeInner> {
     pub value: Rc<T>,
     pub hash: u64,
 }
 
-pub struct NodeStorage<T: Hashable> {
+pub struct NodeStorage<T: HashNodeInner> {
     nodes: RwLock<HashMap<u64, HashNode<T>, std::hash::BuildHasherDefault<IdentityHasher>>>,
 }
 
-impl<T: Hashable> NodeStorage<T> {
+impl<T: HashNodeInner> NodeStorage<T> {
     pub fn new() -> Self {
         Self {
             nodes: RwLock::new(HashMap::default()),
@@ -60,6 +61,12 @@ impl<T: Hashable> NodeStorage<T> {
     pub fn clear(&self) {
         let mut nodes = self.nodes.write().unwrap();
         nodes.clear();
+    }
+}
+
+impl<T: HashNodeInner> HashNode<T> {
+    pub fn size(&self) -> u64 {
+        self.value.size()
     }
 }
 
@@ -104,13 +111,13 @@ impl Hasher for IdentityHasher {
     }
 }
 
-impl<T: Hashable + Clone> Default for NodeStorage<T> {
+impl<T: HashNodeInner + Clone> Default for NodeStorage<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: Hashable> Clone for HashNode<T> {
+impl<T: HashNodeInner> Clone for HashNode<T> {
     fn clone(&self) -> Self {
         Self {
             value: self.value.clone(),
@@ -119,25 +126,25 @@ impl<T: Hashable> Clone for HashNode<T> {
     }
 }
 
-impl<T: Hashable> PartialEq for HashNode<T> {
+impl<T: HashNodeInner> PartialEq for HashNode<T> {
     fn eq(&self, other: &Self) -> bool {
         self.hash == other.hash
     }
 }
 
-impl<T: Display + Hashable> Display for HashNode<T> {
+impl<T: Display + HashNodeInner> Display for HashNode<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.value)
     }
 }
 
-impl<T: Hashable> Hash for HashNode<T> {
+impl<T: HashNodeInner> Hash for HashNode<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_u64(self.hash);
     }
 }
 
-impl<T: Hashable> From<T> for HashNode<T> {
+impl<T: HashNodeInner> From<T> for HashNode<T> {
     fn from(value: T) -> Self {
         let hash = value.hash();
         HashNode {
@@ -147,20 +154,28 @@ impl<T: Hashable> From<T> for HashNode<T> {
     }
 }
 
-impl<T: Hashable> HashNode<T> {
+impl<T: HashNodeInner> HashNode<T> {
     pub fn from_store(value: T, store: &NodeStorage<T>) -> Self {
         store.get_or_insert(value)
     }
 }
 
-impl Hashable for u64 {
+impl HashNodeInner for u64 {
     fn hash(&self) -> u64 {
         *self
     }
+    
+    fn size(&self) -> u64 {
+        1
+    }
 }
 
-impl Hashable for u32 {
+impl HashNodeInner for u32 {
     fn hash(&self) -> u64 {
         *self as u64
+    }
+    
+    fn size(&self) -> u64 {
+        1
     }
 }
