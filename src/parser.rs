@@ -1,4 +1,4 @@
-use crate::ast::{Expression, HashNode, Proposition, Term};
+use crate::ast::{Expression, HashNode, NodeStore, Proposition, Term};
 use std::iter::Peekable;
 use std::str::Chars;
 
@@ -135,12 +135,22 @@ impl<'a> Iterator for Lexer<'a> {
 
 pub struct Parser<'a> {
     tokens: Peekable<Lexer<'a>>,
+    proposition_store: NodeStore<Proposition>,
+    expression_store: NodeStore<Expression>,
+    term_store: NodeStore<Term>,
+    u64_store: NodeStore<u64>,
+    u32_store: NodeStore<u32>,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(input: &'a str) -> Self {
         Self {
             tokens: Lexer::new(input).peekable(),
+            proposition_store: NodeStore::new(),
+            expression_store: NodeStore::new(),
+            term_store: NodeStore::new(),
+            u64_store: NodeStore::new(),
+            u32_store: NodeStore::new(),
         }
     }
 
@@ -171,41 +181,48 @@ impl<'a> Parser<'a> {
             Token::And => {
                 let left = self.parse_parenthesized(Self::parse_proposition)?;
                 let right = self.parse_parenthesized(Self::parse_proposition)?;
-                Ok(Proposition::And(left, right).into())
+                let prop = Proposition::And(left, right);
+                Ok(HashNode::from_store(prop, &self.proposition_store))
             }
             Token::Or => {
                 let left = self.parse_parenthesized(Self::parse_proposition)?;
                 let right = self.parse_parenthesized(Self::parse_proposition)?;
-                Ok(Proposition::Or(left, right).into())
+                let prop = Proposition::Or(left, right);
+                Ok(HashNode::from_store(prop, &self.proposition_store))
             }
             Token::Implies => {
                 let left = self.parse_parenthesized(Self::parse_proposition)?;
                 let right = self.parse_parenthesized(Self::parse_proposition)?;
-                Ok(Proposition::Implies(left, right).into())
+                let prop = Proposition::Implies(left, right);
+                Ok(HashNode::from_store(prop, &self.proposition_store))
             }
             Token::Not => {
                 let inner = self.parse_parenthesized(Self::parse_proposition)?;
-                Ok(Proposition::Not(inner).into())
+                let prop = Proposition::Not(inner);
+                Ok(HashNode::from_store(prop, &self.proposition_store))
             }
             Token::Forall => {
                 // Forall (<prop>)
                 let inner = self.parse_parenthesized(Self::parse_proposition)?;
-                Ok(Proposition::Forall(inner).into())
+                let prop = Proposition::Forall(inner);
+                Ok(HashNode::from_store(prop, &self.proposition_store))
             }
             Token::Exists => {
                 let inner = self.parse_parenthesized(Self::parse_proposition)?;
-                Ok(Proposition::Exists(inner).into())
+                let prop = Proposition::Exists(inner);
+                Ok(HashNode::from_store(prop, &self.proposition_store))
             }
             Token::Eq => {
                 let left = self.parse_parenthesized(Self::parse_expression)?;
                 let right = self.parse_parenthesized(Self::parse_expression)?;
-                Ok(Proposition::Equals(left, right).into())
+                let prop = Proposition::Equals(left, right);
+                Ok(HashNode::from_store(prop, &self.proposition_store))
             }
             _ => Err(format!("Unexpected token {:?} for start of Proposition", token)),
         }
     }
 
-    pub fn parse_expression(&mut self) -> Result<Expression, String> {
+    pub fn parse_expression(&mut self) -> Result<HashNode<Expression>, String> {
         // Peek to decide if it's an Op (Plus) or a Term start
         let token = self.tokens.peek().cloned().ok_or("Unexpected EOF expecting Expression")?;
         
@@ -214,18 +231,20 @@ impl<'a> Parser<'a> {
                 self.tokens.next(); // consume PLUS
                 let left = self.parse_parenthesized(Self::parse_expression)?;
                 let right = self.parse_parenthesized(Self::parse_expression)?;
-                Ok(Expression::Add(Box::new(left), Box::new(right)))
+                let expr = Expression::Add(left, right);
+                Ok(HashNode::from_store(expr, &self.expression_store))
             }
             // S, Number, DeBruijn are Term starters
             Token::Successor | Token::Number(_) | Token::DeBruijn(_) => {
                 let term = self.parse_term()?;
-                Ok(Expression::Term(term))
+                let expr = Expression::Term((*term.value).clone());
+                Ok(HashNode::from_store(expr, &self.expression_store))
             }
             _ => Err(format!("Unexpected token {:?} for start of Expression", token)),
         }
     }
 
-    pub fn parse_term(&mut self) -> Result<Term, String> {
+    pub fn parse_term(&mut self) -> Result<HashNode<Term>, String> {
         let token = self.tokens.next().ok_or("Unexpected EOF expecting Term")?;
         match token {
             Token::Successor => {
@@ -233,11 +252,30 @@ impl<'a> Parser<'a> {
                 // Let's assume standard function call syntax S(term) or S (term)
                 // The parse_parenthesized expects ( ... )
                 let inner = self.parse_parenthesized(Self::parse_term)?;
-                Ok(Term::Successor(Box::new(inner)))
+                let term = Term::Successor(inner);
+                Ok(HashNode::from_store(term, &self.term_store))
             }
-            Token::Number(n) => Ok(Term::Number(n)),
-            Token::DeBruijn(n) => Ok(Term::DeBruijn(n)),
+            Token::Number(n) => {
+                let n_node = HashNode::from_store(n, &self.u64_store);
+                let term = Term::Number(n_node);
+                Ok(HashNode::from_store(term, &self.term_store))
+            }
+            Token::DeBruijn(n) => {
+                let n_node = HashNode::from_store(n, &self.u32_store);
+                let term = Term::DeBruijn(n_node);
+                Ok(HashNode::from_store(term, &self.term_store))
+            }
             _ => Err(format!("Unexpected token {:?} for Term", token)),
         }
+    }
+
+    pub fn store_stats(&self) -> (usize, usize, usize, usize, usize) {
+        (
+            self.proposition_store.len(),
+            self.expression_store.len(),
+            self.term_store.len(),
+            self.u64_store.len(),
+            self.u32_store.len(),
+        )
     }
 }

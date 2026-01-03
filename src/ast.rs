@@ -1,13 +1,71 @@
-use std::{fmt, hash::Hasher, rc::Rc};
+use std::{collections::HashMap, fmt, hash::Hasher, rc::Rc, sync::RwLock};
 
 pub trait Hashable {
     fn hash(&self) -> u64;
 }
 
-#[derive(Debug, Clone)]
-pub struct HashNode<T: Hashable> {
+pub struct NodeStore<T: Hashable + Clone> {
+    nodes: RwLock<HashMap<u64, HashNode<T>>>,
+}
+
+impl<T: Hashable + Clone> NodeStore<T> {
+    pub fn new() -> Self {
+        Self {
+            nodes: RwLock::new(HashMap::new()),
+        }
+    }
+
+    pub fn get_or_insert(&self, value: T) -> HashNode<T> {
+        let hash = value.hash();
+        let mut nodes = self.nodes.write().unwrap();
+        
+        if let Some(existing) = nodes.get(&hash) {
+            existing.clone()
+        } else {
+            let node = HashNode {
+                value: Rc::new(value),
+                hash,
+            };
+            nodes.insert(hash, node.clone());
+            node
+        }
+    }
+
+    pub fn get(&self, hash: u64) -> Option<HashNode<T>> {
+        let nodes = self.nodes.read().unwrap();
+        nodes.get(&hash).cloned()
+    }
+
+    pub fn len(&self) -> usize {
+        let nodes = self.nodes.read().unwrap();
+        nodes.len()
+    }
+
+    pub fn clear(&self) {
+        let mut nodes = self.nodes.write().unwrap();
+        nodes.clear();
+    }
+}
+
+impl<T: Hashable + Clone> Default for NodeStore<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Debug)]
+pub struct HashNode<T: Hashable + Clone> {
     pub value: Rc<T>,
     pub hash: u64,
+}
+
+impl<T: Hashable + Clone> Clone for HashNode<T> {
+    fn clone(&self) -> Self {
+        Self {
+            value: self.value.clone(),
+            hash: self.hash,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -34,13 +92,13 @@ pub enum Term {
     DeBruijn(HashNode<u32>),
 }
 
-impl<T: Hashable> PartialEq for HashNode<T> {
+impl<T: Hashable + Clone> PartialEq for HashNode<T> {
     fn eq(&self, other: &Self) -> bool {
         self.hash == other.hash
     }
 }
 
-impl<T: fmt::Display + Hashable> fmt::Display for HashNode<T> {
+impl<T: fmt::Display + Hashable + Clone> fmt::Display for HashNode<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.value)
     }
@@ -141,18 +199,24 @@ impl Hashable for u32 {
     }
 }
 
-impl<T: Hashable> std::hash::Hash for HashNode<T> {
+impl<T: Hashable + Clone> std::hash::Hash for HashNode<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_u64(self.hash);
     }
 }
 
-impl<T: Hashable> From<T> for HashNode<T> {
+impl<T: Hashable + Clone> From<T> for HashNode<T> {
     fn from(value: T) -> Self {
         let hash = value.hash();
         HashNode {
             value: Rc::new(value),
             hash,
         }
+    }
+}
+
+impl<T: Hashable + Clone> HashNode<T> {
+    pub fn from_store(value: T, store: &NodeStore<T>) -> Self {
+        store.get_or_insert(value)
     }
 }
