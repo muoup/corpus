@@ -5,7 +5,7 @@ use crate::syntax::{ArithmeticExpression, Term};
 
 pub fn apply_substitution(
     pattern: &Pattern<ArithmeticExpression>,
-    subst: &Substitution,
+    subst: &Substitution<ArithmeticExpression>,
     store: &NodeStorage<ArithmeticExpression>,
 ) -> HashNode<ArithmeticExpression> {
     match pattern {

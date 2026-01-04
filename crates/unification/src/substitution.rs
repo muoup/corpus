@@ -1,22 +1,22 @@
-use corpus_core::nodes::{HashNode, HashNodeInner, NodeStorage};
+use corpus_core::nodes::{HashNode, HashNodeInner};
 use std::collections::HashMap;
 
-pub struct Substitution {
-    bindings: HashMap<u32, HashNode<u32>>,
+pub struct Substitution<T: HashNodeInner> {
+    bindings: HashMap<u32, HashNode<T>>,
 }
 
-impl Substitution {
+impl<T: HashNodeInner> Substitution<T> {
     pub fn new() -> Self {
         Substitution {
             bindings: HashMap::new(),
         }
     }
 
-    pub fn bind(&mut self, index: u32, term: HashNode<u32>) {
+    pub fn bind(&mut self, index: u32, term: HashNode<T>) {
         self.bindings.insert(index, term);
     }
 
-    pub fn get(&self, index: u32) -> Option<&HashNode<u32>> {
+    pub fn get(&self, index: u32) -> Option<&HashNode<T>> {
         self.bindings.get(&index)
     }
 
@@ -32,11 +32,11 @@ impl Substitution {
         self.bindings.contains_key(&index)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&u32, &HashNode<u32>)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&u32, &HashNode<T>)> {
         self.bindings.iter()
     }
 
-    pub fn compose(&self, other: &Substitution) -> Substitution {
+    pub fn compose(&self, other: &Substitution<T>) -> Substitution<T> {
         let mut result = self.clone();
         for (idx, term) in other.iter() {
             result.bind(*idx, term.clone());
@@ -44,16 +44,12 @@ impl Substitution {
         result
     }
 
-    pub fn apply_to_var<T: HashNodeInner>(
-        &self,
-        var_idx: u32,
-        _store: &NodeStorage<T>,
-    ) -> Option<HashNode<u32>> {
-        self.get(var_idx).cloned()
+    pub fn apply_to_var(&self, var_idx: u32) -> Option<&HashNode<T>> {
+        self.get(var_idx)
     }
 }
 
-impl Clone for Substitution {
+impl<T: HashNodeInner> Clone for Substitution<T> {
     fn clone(&self) -> Self {
         Substitution {
             bindings: self.bindings.clone(),
@@ -61,13 +57,15 @@ impl Clone for Substitution {
     }
 }
 
-impl std::fmt::Debug for Substitution {
+impl<T: HashNodeInner> std::fmt::Debug for Substitution<T> 
+    where T: std::fmt::Debug
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Substitution({:?})", self.bindings)
     }
 }
 
-impl Default for Substitution {
+impl<T: HashNodeInner> Default for Substitution<T> {
     fn default() -> Self {
         Self::new()
     }

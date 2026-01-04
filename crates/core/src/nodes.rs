@@ -8,9 +8,13 @@ use std::{
 
 // --- Public Interface ---
 
-pub trait HashNodeInner {
+pub trait HashNodeInner: Sized {
     fn hash(&self) -> u64;
     fn size(&self) -> u64;
+
+    fn decompose(&self) -> Option<(u8, Vec<HashNode<Self>>)> {
+        None
+    }
 }
 
 pub struct Hashing;

@@ -13,20 +13,20 @@ pub trait Unifiable: HashNodeInner + Clone {
     fn unify(
         pattern: &Pattern<Self>,
         term: &HashNode<Self>,
-        subst: &Substitution,
+        subst: &Substitution<Self>,
         store: &NodeStorage<Self>,
-    ) -> Result<Substitution, UnificationError>;
+    ) -> Result<Substitution<Self>, UnificationError>;
 
-    fn occurs_check(var_index: u32, term: &HashNode<Self>, subst: &Substitution) -> bool;
+    fn occurs_check(var_index: u32, term: &HashNode<Self>, subst: &Substitution<Self>) -> bool;
 }
 
-impl<T: HashNodeInner + Clone> Unifiable for T {
+ impl<T: HashNodeInner + Clone> Unifiable for T {
     fn unify(
         pattern: &Pattern<Self>,
         term: &HashNode<Self>,
-        subst: &Substitution,
+        subst: &Substitution<Self>,
         _store: &NodeStorage<Self>,
-    ) -> Result<Substitution, UnificationError> {
+    ) -> Result<Substitution<Self>, UnificationError> {
         match pattern {
             Pattern::Variable(idx) => {
                 if let Some(bound) = subst.get(*idx) {
@@ -42,7 +42,7 @@ impl<T: HashNodeInner + Clone> Unifiable for T {
                     Err(UnificationError::OccursCheck(*idx, term.hash()))
                 } else {
                     let mut new_subst = subst.clone();
-                    new_subst.bind(*idx, HashNode::from_store(*idx as u32, &NodeStorage::new()));
+                    new_subst.bind(*idx, term.clone());
                     Ok(new_subst)
                 }
             }
@@ -55,15 +55,22 @@ impl<T: HashNodeInner + Clone> Unifiable for T {
                     Err(UnificationError::TypeMismatch)
                 }
             }
-            Pattern::Compound { opcode: _pat_opcode, args: pat_args } => {
+            Pattern::Compound { opcode: pat_opcode, args: pat_args } => {
                 if pat_args.is_empty() {
                     return Err(UnificationError::CannotUnify("Empty compound pattern".into()));
                 }
 
+                let (term_opcode, term_children) = term.value.as_ref().decompose()
+                    .ok_or_else(|| UnificationError::TypeMismatch)?;
+
+                if *pat_opcode != term_opcode || pat_args.len() != term_children.len() {
+                    return Err(UnificationError::CannotUnify("Structure mismatch".into()));
+                }
+
                 let mut new_subst = subst.clone();
 
-                for pat_arg in pat_args {
-                    new_subst = Self::unify(pat_arg, term, &new_subst, _store)?;
+                for (pat_arg, term_child) in pat_args.iter().zip(term_children.iter()) {
+                    new_subst = Self::unify(pat_arg, term_child, &new_subst, _store)?;
                 }
 
                 Ok(new_subst)
@@ -71,7 +78,7 @@ impl<T: HashNodeInner + Clone> Unifiable for T {
         }
     }
 
-    fn occurs_check(var_index: u32, term: &HashNode<Self>, subst: &Substitution) -> bool {
+    fn occurs_check(var_index: u32, term: &HashNode<Self>, subst: &Substitution<Self>) -> bool {
         if subst.contains(var_index) {
             if let Some(bound) = subst.get(var_index) {
                 if bound.hash() == term.hash() {

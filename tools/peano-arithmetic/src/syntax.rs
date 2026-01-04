@@ -76,6 +76,10 @@ impl HashNodeInner for PeanoContent {
             PeanoContent::Equals(left, right) => 1 + left.size() + right.size(),
         }
     }
+
+    fn decompose(&self) -> Option<(u8, Vec<HashNode<Self>>)> {
+        None
+    }
 }
 
 impl HashNodeInner for ArithmeticExpression {
@@ -94,6 +98,15 @@ impl HashNodeInner for ArithmeticExpression {
             ArithmeticExpression::Term(term) => 1 + term.size(),
         }
     }
+
+    fn decompose(&self) -> Option<(u8, Vec<HashNode<Self>>)> {
+        match self {
+            ArithmeticExpression::Add(left, right) => {
+                Some((8, vec![left.clone(), right.clone()]))
+            }
+            ArithmeticExpression::Term(_) => None,
+        }
+    }
 }
 
 impl HashNodeInner for Term {
@@ -110,6 +123,15 @@ impl HashNodeInner for Term {
             Term::Successor(inner) => 1 + inner.size(),
             Term::Number(_) => 1,
             Term::DeBruijn(_) => 1,
+        }
+    }
+
+    fn decompose(&self) -> Option<(u8, Vec<HashNode<Self>>)> {
+        match self {
+            Term::Successor(inner) => {
+                Some((10, vec![inner.clone()]))
+            }
+            Term::Number(_) | Term::DeBruijn(_) => None,
         }
     }
 }

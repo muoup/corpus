@@ -1,32 +1,33 @@
-use corpus_core::nodes::{HashNode, HashNodeInner, NodeStorage};
+use corpus_core::nodes::{HashNode, NodeStorage};
 use corpus_rewriting::RewriteRule;
-use corpus_unification::Unifiable;
+use crate::syntax::ArithmeticExpression;
+use crate::rewrite::{apply_rule, apply_rule_reverse};
 
 use std::collections::{BinaryHeap, HashSet};
 use std::cmp::Ordering;
 
 #[derive(Clone)]
-pub struct ProofStep<T: HashNodeInner> {
+pub struct ProofStep {
     pub rule_name: String,
-    pub old_expr: HashNode<T>,
-    pub new_expr: HashNode<T>,
+    pub old_expr: HashNode<ArithmeticExpression>,
+    pub new_expr: HashNode<ArithmeticExpression>,
 }
 
-pub struct ProofState<T: HashNodeInner + Unifiable> {
-    pub lhs: HashNode<T>,
-    pub rhs: HashNode<T>,
-    pub lhs_steps: Vec<ProofStep<T>>,
-    pub rhs_steps: Vec<ProofStep<T>>,
+pub struct ProofState {
+    pub lhs: HashNode<ArithmeticExpression>,
+    pub rhs: HashNode<ArithmeticExpression>,
+    pub lhs_steps: Vec<ProofStep>,
+    pub rhs_steps: Vec<ProofStep>,
     pub estimated_cost: u64,
 }
 
-pub struct Prover<T: HashNodeInner + Unifiable> {
-    rules: Vec<RewriteRule<T>>,
-    store: NodeStorage<T>,
+pub struct Prover {
+    rules: Vec<RewriteRule<ArithmeticExpression>>,
+    store: NodeStorage<ArithmeticExpression>,
     max_nodes: usize,
 }
 
-impl<T: HashNodeInner + Unifiable> Prover<T> {
+impl Prover {
     pub fn new(max_nodes: usize) -> Self {
         Self {
             rules: Vec::new(),
@@ -35,15 +36,15 @@ impl<T: HashNodeInner + Unifiable> Prover<T> {
         }
     }
 
-    pub fn add_rule(&mut self, rule: RewriteRule<T>) {
+    pub fn add_rule(&mut self, rule: RewriteRule<ArithmeticExpression>) {
         self.rules.push(rule);
     }
 
     pub fn prove(
         &self,
-        initial_lhs: &HashNode<T>,
-        initial_rhs: &HashNode<T>,
-    ) -> Option<ProofResult<T>> {
+        initial_lhs: &HashNode<ArithmeticExpression>,
+        initial_rhs: &HashNode<ArithmeticExpression>,
+    ) -> Option<ProofResult> {
         let mut heap = BinaryHeap::new();
         let mut visited: HashSet<(u64, u64)> = HashSet::new();
         let mut nodes_explored = 0usize;
@@ -92,13 +93,12 @@ impl<T: HashNodeInner + Unifiable> Prover<T> {
         None
     }
 
-    fn expand_state(&self, state: &ProofState<T>) -> Vec<ProofState<T>> {
+    fn expand_state(&self, state: &ProofState) -> Vec<ProofState> {
         let mut successors = Vec::new();
 
         for rule in &self.rules {
             if rule.is_bidirectional() {
-                if let Ok(_subst) = rule.try_match(&state.lhs, &self.store) {
-                    let new_lhs = state.lhs.clone();
+                if let Some(new_lhs) = apply_rule(rule, &state.lhs, &self.store) {
                     let new_cost = self.estimate_cost(&new_lhs, &state.rhs);
                     let mut lhs_steps = state.lhs_steps.clone();
                     lhs_steps.push(ProofStep {
@@ -115,8 +115,7 @@ impl<T: HashNodeInner + Unifiable> Prover<T> {
                     });
                 }
 
-                if let Ok(_subst) = rule.try_match(&state.rhs, &self.store) {
-                    let new_rhs = state.rhs.clone();
+                if let Some(new_rhs) = apply_rule_reverse(rule, &state.rhs, &self.store) {
                     let new_cost = self.estimate_cost(&state.lhs, &new_rhs);
                     let mut rhs_steps = state.rhs_steps.clone();
                     rhs_steps.push(ProofStep {
@@ -138,7 +137,7 @@ impl<T: HashNodeInner + Unifiable> Prover<T> {
         successors
     }
 
-    fn estimate_cost(&self, lhs: &HashNode<T>, rhs: &HashNode<T>) -> u64 {
+    fn estimate_cost(&self, lhs: &HashNode<ArithmeticExpression>, rhs: &HashNode<ArithmeticExpression>) -> u64 {
         let lhs_size = lhs.size();
         let rhs_size = rhs.size();
         let lhs_hash = lhs.hash();
@@ -154,38 +153,35 @@ impl<T: HashNodeInner + Unifiable> Prover<T> {
     }
 }
 
-impl<T: HashNodeInner + Unifiable> PartialEq for ProofState<T> {
+impl PartialEq for ProofState {
     fn eq(&self, other: &Self) -> bool {
         self.estimated_cost == other.estimated_cost
     }
 }
 
-impl<T: HashNodeInner + Unifiable> Eq for ProofState<T> {}
+impl Eq for ProofState {}
 
-impl<T: HashNodeInner + Unifiable> PartialOrd for ProofState<T> {
+impl PartialOrd for ProofState {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<T: HashNodeInner + Unifiable> Ord for ProofState<T> {
+impl Ord for ProofState {
     fn cmp(&self, other: &Self) -> Ordering {
         other.estimated_cost.cmp(&self.estimated_cost)
     }
 }
 
-pub struct ProofResult<T: HashNodeInner> {
-    pub lhs_steps: Vec<ProofStep<T>>,
-    pub rhs_steps: Vec<ProofStep<T>>,
+pub struct ProofResult {
+    pub lhs_steps: Vec<ProofStep>,
+    pub rhs_steps: Vec<ProofStep>,
     pub nodes_explored: usize,
-    pub final_expr: HashNode<T>,
+    pub final_expr: HashNode<ArithmeticExpression>,
 }
 
-impl<T: HashNodeInner + Unifiable> ProofResult<T> {
-    pub fn print(&self)
-    where
-        T: std::fmt::Display,
-    {
+impl ProofResult {
+    pub fn print(&self) {
         println!("✓ Theorem proved!");
         println!("Nodes explored: {}", self.nodes_explored);
         println!();
