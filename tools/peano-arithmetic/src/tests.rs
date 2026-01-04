@@ -1,7 +1,6 @@
 use crate::parsing::Parser;
-use crate::syntax::PeanoContent;
 use corpus_classical_logic::{BinaryTruth, ClassicalOperator};
-use corpus_core::expression::{DomainContent, LogicalExpression};
+use corpus_core::expression::LogicalExpression;
 
 #[test]
 fn test_basic_parsing() {
@@ -33,21 +32,4 @@ fn test_basic_parsing() {
     assert_eq!(and_result, BinaryTruth::True);
 
     println!("Basic parsing and evaluation test passed!");
-}
-
-#[test]
-fn test_domain_content() {
-    // Test that PeanoContent correctly implements DomainContent
-    let equals_content = PeanoContent::Equals(
-        crate::syntax::ArithmeticExpression::Term(crate::syntax::Term::Number(0.into())).into(),
-        crate::syntax::ArithmeticExpression::Term(crate::syntax::Term::Number(0.into())).into(),
-    );
-
-    let result = equals_content.evaluate();
-    assert_eq!(
-        result, None,
-        "Equals should return None for evaluation without context"
-    );
-
-    println!("Domain content test passed!");
 }

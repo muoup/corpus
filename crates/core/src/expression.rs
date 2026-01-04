@@ -163,13 +163,6 @@ where
             _ => None,
         }
     }
-
-    pub fn evaluate(&self) -> Option<T> {
-        match self {
-            DomainExpression::Domain(content) => content.evaluate(),
-            DomainExpression::Logical(expr) => Some(expr.evaluate()),
-        }
-    }
 }
 
 pub trait DomainContent<T: TruthValue>
@@ -178,9 +171,6 @@ where
     Self::Operator: HashNodeInner,
 {
     type Operator: LogicalOperator<T>;
-
-    fn evaluate(&self) -> Option<T>;
-    fn truth_value(&self) -> Option<T>;
 }
 
 impl<T: TruthValue, D: DomainContent<T>> HashNodeInner for DomainExpression<T, D>

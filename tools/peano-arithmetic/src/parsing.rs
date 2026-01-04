@@ -167,7 +167,6 @@ pub struct Parser<'a> {
     expression_store: NodeStorage<ArithmeticExpression>,
     term_store: NodeStorage<Term>,
     logical_store: NodeStorage<LogicalExpression<BinaryTruth, ClassicalOperator>>,
-    content_store: NodeStorage<PeanoContent>,
     u64_store: NodeStorage<u64>,
     u32_store: NodeStorage<u32>,
 }
@@ -180,7 +179,6 @@ impl<'a> Parser<'a> {
             expression_store: NodeStorage::new(),
             term_store: NodeStorage::new(),
             logical_store: NodeStorage::new(),
-            content_store: NodeStorage::new(),
             u64_store: NodeStorage::new(),
             u32_store: NodeStorage::new(),
         }

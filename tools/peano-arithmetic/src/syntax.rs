@@ -13,6 +13,8 @@ pub enum PeanoContent {
         HashNode<ArithmeticExpression>,
     ),
     Logical(LogicalExpression<BinaryTruth, ClassicalOperator>),
+    ForAll(HashNode<PeanoContent>),
+    Exists(HashNode<PeanoContent>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -36,23 +38,14 @@ impl fmt::Display for PeanoContent {
         match self {
             PeanoContent::Equals(left, right) => write!(f, "{} = {}", left, right),
             PeanoContent::Logical(expr) => write!(f, "{}", expr),
+            PeanoContent::ForAll(inner) => write!(f, "∀({})", inner),
+            PeanoContent::Exists(inner) => write!(f, "∃({})", inner),
         }
     }
 }
 
 impl DomainContent<BinaryTruth> for PeanoContent {
     type Operator = ClassicalOperator;
-
-    fn evaluate(&self) -> Option<BinaryTruth> {
-        match self {
-            PeanoContent::Equals(_, _) => None, // Cannot evaluate equality without more context
-            PeanoContent::Logical(expr) => Some(expr.evaluate()),
-        }
-    }
-
-    fn truth_value(&self) -> Option<BinaryTruth> {
-        self.evaluate()
-    }
 }
 
 impl fmt::Display for ArithmeticExpression {
@@ -81,14 +74,18 @@ impl HashNodeInner for PeanoContent {
                 let hashes = vec![left.hash, right.hash];
                 Hashing::root_hash(1, &hashes)
             }
-            PeanoContent::Logical(expr) => Hashing::root_hash(2, &[expr.hash()]),
+            PeanoContent::Logical(expr) => expr.hash(),
+            PeanoContent::ForAll(inner) => Hashing::root_hash(2, &[inner.hash]),
+            PeanoContent::Exists(inner) => Hashing::root_hash(3, &[inner.hash]),
         }
     }
 
     fn size(&self) -> u64 {
         match self {
             PeanoContent::Equals(left, right) => 1 + left.size() + right.size(),
-            PeanoContent::Logical(expr) => 1 + expr.size(),
+            PeanoContent::Logical(expr) => expr.size(),
+            PeanoContent::ForAll(inner) => 1 + inner.size(),
+            PeanoContent::Exists(inner) => 1 + inner.size(),
         }
     }
 }
