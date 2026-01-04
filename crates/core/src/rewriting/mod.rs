@@ -1,5 +1,5 @@
-use crate::nodes::{HashNode, HashNodeInner, NodeStorage};
-use crate::opcodes::OpcodeMapper;
+use crate::base::nodes::{HashNode, HashNodeInner, NodeStorage};
+use crate::base::opcodes::OpcodeMapper;
 
 pub mod pattern;
 pub mod substitution;

@@ -6,6 +6,7 @@ Idea: Create a unified grammar to represent knowledge in a generalized way that 
 
 Before expanding upon the idea of a unified grammar, a good starting point is to create a grammar around already granually formulated logical systems. For now, let's just consider Peano Arithmetic (PA) as a starting point. Consider a very simple grammar and the axioms of PA encoded within it:
 
+```text
 <statement> ::= <statement> <binary-operator> <statement>
               | <quantifier> <statement>
               | ( <statement> )
@@ -16,6 +17,7 @@ Before expanding upon the idea of a unified grammar, a good starting point is to
 <number> ::= 0 | 1 | 2 | 3 | ...
 <quantifier> ::= ∀ <variable> | ∃ <variable>
 <variable> ::= x | y | z | ...
+```
 
 Axioms:
 
@@ -33,22 +35,21 @@ Ignoring parsing and syntax trees, as they are relatively straight-forward, the 
 
 These statements, while logically equivalent, are not syntactically equivalent, and even with some trivial normalization scheme, still poses a challenge to unify the hashing scheme. For now, the likely best simple approach is to implement some nornmalization rules and store any duplcate statements we can't quite squash. Consider for instance the following modified grammar:
 
-# Proposition :: Boolean
-<proposition> ::= <logical-binop> (<proposition>) (<proposition>) 
-                | <logical-unop> (<proposition>) 
-                | <quantifier> (<proposition>) 
+```text
+<proposition> ::= <logical-binop> (<proposition>) (<proposition>)
+                | <logical-unop> (<proposition>)
+                | <quantifier> (<proposition>)
                 | <logical-expression>
 <logical-binop> ::= ∧ | ∨ | ->
 <logical-unop> ::= ¬
 <quantifiers> ::= <quantifiers> <quantifier> | ε
 <quantifier> ::= ∀ | ∃
 
-# Logical Expression :: Boolean
 <logical-expression> ::= = (<expression>) (<expression>)
 
-# Expression :: Term
-<expression> ::= <term> 
+<expression> ::= <term>
                | <binary-operator> (<expression>) (<expression>)
 <term> ::= S(<term>) | <number> | <De Bruijn-index>
 <number> ::= 0 | 1 | 2 | 3 | ...
 <De Bruijn-index> ::= /0 | /1 | /2 | /3 | ...
+```

@@ -1,4 +1,4 @@
-use crate::nodes::HashNodeInner;
+use crate::base::nodes::HashNodeInner;
 use std::fmt::{self, Debug, Display};
 
 pub enum QuantifierType {

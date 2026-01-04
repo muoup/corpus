@@ -1,4 +1,4 @@
-use crate::nodes::{HashNode, HashNodeInner, NodeStorage};
+use crate::base::nodes::{HashNode, HashNodeInner, NodeStorage};
 use crate::rewriting::pattern::Pattern;
 use crate::rewriting::substitution::Substitution;
 
@@ -93,7 +93,7 @@ impl<T: HashNodeInner + Clone> Unifiable for T {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::nodes::{HashNode, NodeStorage};
+    use crate::base::nodes::{HashNode, NodeStorage};
 
     #[test]
     fn test_variable_unification() {

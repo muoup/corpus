@@ -1,7 +1,7 @@
-use corpus_core::nodes::HashNode;
+use corpus_core::base::nodes::HashNode;
 use peano_arithmetic::axioms::peano_arithmetic_rules;
 use peano_arithmetic::parsing::Parser;
-use peano_arithmetic::prover::Prover;
+use peano_arithmetic::prover::{create_prover, ProofResultExt};
 use peano_arithmetic::syntax::{ArithmeticExpression, PeanoContent, PeanoExpression};
 
 fn main() {
@@ -40,7 +40,7 @@ fn main() {
             println!("RHS: {}", rhs);
             println!();
 
-            let mut prover = Prover::new(10000);
+            let mut prover = create_prover(10000);
 
             println!("Loading Peano axioms...");
             for rule in peano_arithmetic_rules() {

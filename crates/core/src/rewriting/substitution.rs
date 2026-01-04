@@ -1,4 +1,4 @@
-use crate::nodes::{HashNode, HashNodeInner};
+use crate::base::nodes::{HashNode, HashNodeInner};
 use std::collections::HashMap;
 
 pub struct Substitution<T: HashNodeInner> {

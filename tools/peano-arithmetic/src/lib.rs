@@ -6,5 +6,5 @@ pub mod patterns;
 pub mod prover;
 pub mod rewrite;
 
-pub use prover::{Prover, ProofResult, ProofState, ProofStep};
+pub use prover::{PeanoProver, create_prover, ProofResult, ProofState, ProofStep, ProofResultExt};
 pub use opcodes::PeanoOpcodeMapper;

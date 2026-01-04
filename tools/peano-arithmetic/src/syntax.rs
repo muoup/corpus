@@ -2,7 +2,7 @@ use core::fmt;
 
 use corpus_classical_logic::{BinaryTruth, ClassicalOperator};
 use corpus_core::expression::{DomainContent, DomainExpression};
-use corpus_core::nodes::{HashNode, HashNodeInner, Hashing};
+use corpus_core::nodes::{HashNode, HashNodeInner, Hashing, NodeStorage};
 
 pub type PeanoExpression = DomainExpression<BinaryTruth, PeanoContent>;
 
@@ -102,6 +102,52 @@ impl HashNodeInner for ArithmeticExpression {
             ArithmeticExpression::Successor(inner) => {
                 Some((Hashing::opcode("successor"), vec![inner.clone()]))
             }
+            ArithmeticExpression::Number(_) | ArithmeticExpression::DeBruijn(_) => None,
+        }
+    }
+
+    fn rewrite_any_subterm<F>(
+        &self,
+        node: &HashNode<Self>,
+        store: &NodeStorage<Self>,
+        try_rewrite: &F,
+    ) -> Option<HashNode<Self>>
+    where
+        F: Fn(&HashNode<Self>) -> Option<HashNode<Self>>,
+    {
+        // Try rewriting self first
+        if let Some(rewritten) = try_rewrite(node) {
+            return Some(rewritten);
+        }
+
+        // Then try subterms recursively
+        match self {
+            ArithmeticExpression::Add(left, right) => {
+                // Try rewriting left subterm
+                if let Some(new_left) = left.value.rewrite_any_subterm(left, store, try_rewrite) {
+                    return Some(HashNode::from_store(
+                        ArithmeticExpression::Add(new_left, right.clone()),
+                        store,
+                    ));
+                }
+                // Try rewriting right subterm
+                if let Some(new_right) = right.value.rewrite_any_subterm(right, store, try_rewrite) {
+                    return Some(HashNode::from_store(
+                        ArithmeticExpression::Add(left.clone(), new_right),
+                        store,
+                    ));
+                }
+                None
+            }
+            ArithmeticExpression::Successor(inner) => {
+                // Try rewriting inner subterm
+                inner.value.rewrite_any_subterm(inner, store, try_rewrite)
+                    .map(|new_inner| HashNode::from_store(
+                        ArithmeticExpression::Successor(new_inner),
+                        store,
+                    ))
+            }
+            // Number and DeBruijn have no subterms
             ArithmeticExpression::Number(_) | ArithmeticExpression::DeBruijn(_) => None,
         }
     }

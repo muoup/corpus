@@ -1,16 +1,13 @@
-pub mod expression;
-pub mod logic;
-pub mod nodes;
-pub mod opcodes;
-pub mod patterns;
+pub mod base;
+pub mod proving;
 pub mod rewriting;
-pub mod truth;
-pub mod variables;
+
+// Re-export base module items for backwards compatibility
+pub use base::*;
+
+// Re-export proving for convenience
+pub use proving::{Prover, CostEstimator, GoalChecker, SubtermRewritable, ProofState, ProofStep, ProofResult,
+                 SizeHashCostEstimator, HashEqualityGoalChecker};
 
 // Re-export rewriting for convenience
 pub use rewriting::{Pattern, Substitution, Unifiable, UnificationError, RewriteDirection, RewriteRule};
-
-// Re-export new traits
-pub use opcodes::OpcodeMapper;
-pub use patterns::PatternDecomposer;
-pub use variables::VariableExtractor;
