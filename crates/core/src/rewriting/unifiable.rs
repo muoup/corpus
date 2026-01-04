@@ -1,6 +1,6 @@
-use corpus_core::nodes::{HashNode, HashNodeInner, NodeStorage};
-use crate::pattern::Pattern;
-use crate::substitution::Substitution;
+use crate::nodes::{HashNode, HashNodeInner, NodeStorage};
+use crate::rewriting::pattern::Pattern;
+use crate::rewriting::substitution::Substitution;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum UnificationError {
@@ -20,7 +20,7 @@ pub trait Unifiable: HashNodeInner + Clone {
     fn occurs_check(var_index: u32, term: &HashNode<Self>, subst: &Substitution<Self>) -> bool;
 }
 
- impl<T: HashNodeInner + Clone> Unifiable for T {
+impl<T: HashNodeInner + Clone> Unifiable for T {
     fn unify(
         pattern: &Pattern<Self>,
         term: &HashNode<Self>,
@@ -93,7 +93,7 @@ pub trait Unifiable: HashNodeInner + Clone {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use corpus_core::nodes::{HashNode, NodeStorage};
+    use crate::nodes::{HashNode, NodeStorage};
 
     #[test]
     fn test_variable_unification() {

@@ -4,58 +4,33 @@ This project explores unified grammars, axiom systems, and rewriting engines thr
 
 ## Project Structure
 
-This is a Cargo workspace monorepo with the following organization:
+This is a Cargo workspace monorepo with the following high-level organization:
 
 ```
 corpus/
 ├── Cargo.toml                 # Workspace root
 ├── .cargo/config.toml        # Workspace configuration
 ├── crates/                   # Core libraries and components
-│   ├── core/                 # Core types, traits, HashNode system
-│   └── parser/               # Grammar parsing logic
 ├── tools/                    # Experimental projects and utilities
-│   └── axiom-generator/      # Statement generation tool
 └── docs/                     # Documentation
 ```
 
-## Components
-
-### crates/core
-Core data structures and utilities:
-- `HashNode<T>`: Hash-consed nodes for efficient deduplication
-- `NodeStore<T>`: Thread-safe storage for hash-consed nodes
-- AST types: `Proposition`, `Expression`, `Term`
-- Hashable trait and implementations
-
-### crates/parser
-Grammar parsing and tokenization:
-- `Lexer`: Tokenization of logical expressions
-- `Parser`: Recursive descent parser for the unified grammar
-- Support for De Bruijn indices, logical operators, and arithmetic
-
-## Tools
-
-### tools/axiom-generator
-Demonstrates the core functionality by parsing logical statements and testing deduplication. This tool shows how the HashNode system efficiently stores identical logical expressions.
-
-## Development
+## Quick Start
 
 ### Building the Workspace
 ```bash
 # Build all packages
 cargo build --workspace
-
-# Or use the alias
-cargo build-all
 ```
 
-### Running Tools
+### Running the Peano Arithmetic Prover
 ```bash
-# Run the axiom generator
-cargo run --package axiom-generator
+# Run the prover CLI
+cargo run --package peano-arithmetic --bin prover
 
-# Or use the alias
-cargo run-axiom
+# Example usage:
+#   cargo run --bin prover -- "S(0) + 0 = S(0)"
+#   cargo run --bin prover -- "0 + 0 = 0"
 ```
 
 ### Testing
@@ -64,26 +39,36 @@ cargo run-axiom
 cargo test --workspace
 ```
 
+## Overview of Components
+
+### Core Crates
+
+- **`corpus-core`**: Hash-consed node system and core data structures
+- **`corpus-classical-logic`**: Classical logical operators (AND, OR, NOT, etc.)
+- **`corpus-rewriting`**: Bidirectional rewrite rules engine
+
+### Tools
+
+- **`peano-arithmetic`**: Theorem prover using priority queue search with Peano axioms
+
 ## Usage Examples
 
-The axiom generator demonstrates parsing of statements like:
-- `FORALL ( EQ ( S(/0) ) ( 0 ) )` → ∀(S(/0) = 0)
-- `EQ ( PLUS ( S(0) ) ( S(0) ) ) ( S(S(0)) )` → (S(0) + S(0)) = S(S(0))
+The Peano Arithmetic prover can prove statements like:
+- `S(0) + 0 = S(0)` → Proved using axiom 3 (additive identity)
+- `0 + 0 = 0` → Proved using axiom 3
+- `S(0) + S(0) = S(S(0))` → Uses axiom 4 (additive successor)
 
-## Future Development
+For detailed documentation on each crate's purpose and API, see [CRATES.md](docs/CRATES.md).
 
-This structure supports adding:
-- `crates/rewriting/`: Core rewriting engine components
-- `crates/ai-interface/`: Natural language processing for queries
-- `tools/query-interface/`: AI-powered query processing
-- `examples/`: Demonstrations and experiments
-- `tests/`: Integration tests across components
+For the unified grammar specification, see [unified-grammar.md](docs/unified-grammar.md).
 
-## Workspace Configuration
+## Architecture
 
-The workspace uses Cargo's workspace features for:
-- Shared dependency management
-- Unified building and testing
-- Custom aliases defined in `.cargo/config.toml`
+The project follows a layered architecture:
 
-This organization provides a scalable foundation for investigating logical systems, axiom generation, and rewriting engines while maintaining clean separation of concerns and code reusability.
+1. **Core Layer** (`corpus-core`): Hash-consed AST nodes, expression types
+2. **Logic Layer** (`corpus-classical-logic`): Logical operator definitions
+4. **Rewriting Layer** (`corpus-rewriting`): Rule-based transformation system
+5. **Application Layer** (`peano-arithmetic`): Concrete theorem prover implementation
+
+This modular design allows components to be reused across different logical systems and applications.

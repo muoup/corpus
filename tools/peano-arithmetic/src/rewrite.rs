@@ -1,78 +1,51 @@
 use corpus_core::nodes::{HashNode, NodeStorage};
-use corpus_rewriting::RewriteRule;
-use corpus_unification::{Pattern, Substitution};
+use corpus_core::rewriting::RewriteRule;
 
 use crate::syntax::ArithmeticExpression;
+use crate::opcodes::PeanoOpcodeMapper;
 
 pub fn apply_rule(
-    rule: &RewriteRule<ArithmeticExpression>,
+    rule: &RewriteRule<ArithmeticExpression, PeanoOpcodeMapper>,
     term: &HashNode<ArithmeticExpression>,
     store: &NodeStorage<ArithmeticExpression>,
 ) -> Option<HashNode<ArithmeticExpression>> {
-    let subst = rule.try_match(term, store).ok()?;
-    Some(apply_substitution_to_pattern(&rule.replacement, &subst, store))
+    rule.apply(term, store)
 }
 
 pub fn apply_rule_reverse(
-    rule: &RewriteRule<ArithmeticExpression>,
+    rule: &RewriteRule<ArithmeticExpression, PeanoOpcodeMapper>,
     term: &HashNode<ArithmeticExpression>,
     store: &NodeStorage<ArithmeticExpression>,
 ) -> Option<HashNode<ArithmeticExpression>> {
-    let subst = rule.try_match_reverse(term, store).ok()?;
-    Some(apply_substitution_to_pattern(&rule.pattern, &subst, store))
+    rule.apply_reverse(term, store)
 }
 
-fn apply_substitution_to_pattern(
-    pattern: &Pattern<ArithmeticExpression>,
-    subst: &Substitution<ArithmeticExpression>,
+pub fn rewrite_subterms(
+    rules: &[RewriteRule<ArithmeticExpression, PeanoOpcodeMapper>],
+    term: &HashNode<ArithmeticExpression>,
     store: &NodeStorage<ArithmeticExpression>,
-) -> HashNode<ArithmeticExpression> {
-    match pattern {
-        Pattern::Variable(idx) => subst
-            .get(*idx)
-            .cloned()
-            .expect(&format!("Variable /{} should be bound in substitution", idx)),
-        Pattern::Wildcard => {
-            panic!("Wildcard should not appear in replacement pattern")
-        }
-        Pattern::Constant(c) => HashNode::from_store(c.clone(), store),
-        Pattern::Compound { opcode, args } => {
-            let substituted_args: Vec<HashNode<ArithmeticExpression>> = args
-                .iter()
-                .map(|arg| apply_substitution_to_pattern(arg, subst, store))
-                .collect();
-            construct_compound(*opcode, &substituted_args, store)
-        }
-    }
-}
+) -> Vec<HashNode<ArithmeticExpression>> {
+    let mut results = Vec::new();
 
-fn construct_compound(
-    opcode: u8,
-    args: &[HashNode<ArithmeticExpression>],
-    store: &NodeStorage<ArithmeticExpression>,
-) -> HashNode<ArithmeticExpression> {
-    match opcode {
-        8 if args.len() == 2 => {
-            let expr = ArithmeticExpression::Add(args[0].clone(), args[1].clone());
-            HashNode::from_store(expr, store)
+    for rule in rules {
+        if let Some(new_term) = apply_rule(rule, term, store) {
+            results.push(new_term);
         }
-        10 if args.len() == 1 => {
-            let inner_term = match &*args[0].value {
-                ArithmeticExpression::Term(t) => t.clone(),
-                other => {
-                    eprintln!("Expected term for successor, got: {:?}", other);
-                    panic!("Expected term for successor")
-                }
-            };
-            let expr = ArithmeticExpression::Term(crate::syntax::Term::Successor(
-                HashNode::from_store(inner_term, &NodeStorage::new()),
-            ));
-            HashNode::from_store(expr, store)
+        if let Some(new_term) = apply_rule_reverse(rule, term, store) {
+            results.push(new_term);
         }
-        1 if args.len() == 2 => {
-            let expr = ArithmeticExpression::Add(args[0].clone(), args[1].clone());
-            HashNode::from_store(expr, store)
-        }
-        _ => panic!("Unexpected opcode: {} with {} args", opcode, args.len()),
     }
+
+    match term.value.as_ref() {
+        ArithmeticExpression::Add(left, right) => {
+            results.extend(rewrite_subterms(rules, left, store));
+            results.extend(rewrite_subterms(rules, right, store));
+        }
+        ArithmeticExpression::Successor(inner) => {
+            results.extend(rewrite_subterms(rules, inner, store));
+        }
+        ArithmeticExpression::Number(_) | ArithmeticExpression::DeBruijn(_) => {}
+    }
+
+    results
 }

@@ -1,4 +1,4 @@
-use corpus_core::nodes::{HashNode, NodeStorage};
+use corpus_core::nodes::HashNode;
 use peano_arithmetic::axioms::peano_arithmetic_rules;
 use peano_arithmetic::parsing::Parser;
 use peano_arithmetic::prover::Prover;
@@ -40,11 +40,10 @@ fn main() {
             println!("RHS: {}", rhs);
             println!();
 
-            let store = NodeStorage::new();
             let mut prover = Prover::new(10000);
 
             println!("Loading Peano axioms...");
-            for rule in peano_arithmetic_rules(&store) {
+            for rule in peano_arithmetic_rules() {
                 println!("  - {}", rule.name);
                 prover.add_rule(rule);
             }

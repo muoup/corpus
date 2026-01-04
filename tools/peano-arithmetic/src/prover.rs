@@ -1,7 +1,8 @@
 use corpus_core::nodes::{HashNode, NodeStorage};
-use corpus_rewriting::RewriteRule;
+use corpus_core::rewriting::RewriteRule;
 use crate::syntax::ArithmeticExpression;
-use crate::rewrite::{apply_rule, apply_rule_reverse};
+use crate::opcodes::PeanoOpcodeMapper;
+use crate::rewrite::{apply_rule, apply_rule_reverse, rewrite_subterms};
 
 use std::collections::{BinaryHeap, HashSet};
 use std::cmp::Ordering;
@@ -22,7 +23,7 @@ pub struct ProofState {
 }
 
 pub struct Prover {
-    rules: Vec<RewriteRule<ArithmeticExpression>>,
+    rules: Vec<RewriteRule<ArithmeticExpression, PeanoOpcodeMapper>>,
     store: NodeStorage<ArithmeticExpression>,
     max_nodes: usize,
 }
@@ -36,7 +37,7 @@ impl Prover {
         }
     }
 
-    pub fn add_rule(&mut self, rule: RewriteRule<ArithmeticExpression>) {
+    pub fn add_rule(&mut self, rule: RewriteRule<ArithmeticExpression, PeanoOpcodeMapper>) {
         self.rules.push(rule);
     }
 
@@ -132,6 +133,42 @@ impl Prover {
                     });
                 }
             }
+        }
+
+        // Try rewriting subterms on LHS
+        for subterm in rewrite_subterms(&self.rules, &state.lhs, &self.store) {
+            let new_cost = self.estimate_cost(&subterm, &state.rhs);
+            let mut lhs_steps = state.lhs_steps.clone();
+            lhs_steps.push(ProofStep {
+                rule_name: "subterm_rewrite".to_string(),
+                old_expr: state.lhs.clone(),
+                new_expr: subterm.clone(),
+            });
+            successors.push(ProofState {
+                lhs: subterm,
+                rhs: state.rhs.clone(),
+                lhs_steps,
+                rhs_steps: state.rhs_steps.clone(),
+                estimated_cost: new_cost,
+            });
+        }
+
+        // Try rewriting subterms on RHS
+        for subterm in rewrite_subterms(&self.rules, &state.rhs, &self.store) {
+            let new_cost = self.estimate_cost(&state.lhs, &subterm);
+            let mut rhs_steps = state.rhs_steps.clone();
+            rhs_steps.push(ProofStep {
+                rule_name: "subterm_rewrite".to_string(),
+                old_expr: state.rhs.clone(),
+                new_expr: subterm.clone(),
+            });
+            successors.push(ProofState {
+                lhs: state.lhs.clone(),
+                rhs: subterm,
+                lhs_steps: state.lhs_steps.clone(),
+                rhs_steps,
+                estimated_cost: new_cost,
+            });
         }
 
         successors

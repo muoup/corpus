@@ -1,4 +1,4 @@
-use corpus_core::nodes::{HashNode, HashNodeInner};
+use crate::nodes::{HashNode, HashNodeInner};
 use std::collections::HashMap;
 
 pub struct Substitution<T: HashNodeInner> {
@@ -57,7 +57,7 @@ impl<T: HashNodeInner> Clone for Substitution<T> {
     }
 }
 
-impl<T: HashNodeInner> std::fmt::Debug for Substitution<T> 
+impl<T: HashNodeInner> std::fmt::Debug for Substitution<T>
     where T: std::fmt::Debug
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

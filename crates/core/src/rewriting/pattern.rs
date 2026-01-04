@@ -1,4 +1,4 @@
-use corpus_core::nodes::HashNodeInner;
+use crate::nodes::HashNodeInner;
 use std::fmt::{self, Debug, Display};
 
 pub enum QuantifierType {

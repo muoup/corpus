@@ -4,7 +4,7 @@ use corpus_classical_logic::{BinaryTruth, ClassicalOperator};
 use corpus_core::expression::LogicalExpression;
 use corpus_core::nodes::{HashNode, NodeStorage};
 
-use crate::syntax::{ArithmeticExpression, PeanoContent, PeanoExpression, Term};
+use crate::syntax::{ArithmeticExpression, PeanoContent, PeanoExpression};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
@@ -165,11 +165,8 @@ pub struct Parser<'a> {
     tokens: Peekable<Lexer<'a>>,
     peano_store: NodeStorage<PeanoExpression>,
     expression_store: NodeStorage<ArithmeticExpression>,
-    term_store: NodeStorage<Term>,
     content_store: NodeStorage<PeanoContent>,
     logical_store: NodeStorage<LogicalExpression<BinaryTruth, PeanoContent, ClassicalOperator>>,
-    u64_store: NodeStorage<u64>,
-    u32_store: NodeStorage<u32>,
 }
 
 impl<'a> Parser<'a> {
@@ -178,11 +175,8 @@ impl<'a> Parser<'a> {
             tokens: Lexer::new(input).peekable(),
             peano_store: NodeStorage::new(),
             expression_store: NodeStorage::new(),
-            term_store: NodeStorage::new(),
             content_store: NodeStorage::new(),
             logical_store: NodeStorage::new(),
-            u64_store: NodeStorage::new(),
-            u32_store: NodeStorage::new(),
         }
     }
 
@@ -300,7 +294,6 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_expression(&mut self) -> Result<HashNode<ArithmeticExpression>, String> {
-        // Peek to decide if it's an Op (Plus) or a Term start
         let token = self
             .tokens
             .peek()
@@ -309,16 +302,26 @@ impl<'a> Parser<'a> {
 
         match token {
             Token::Plus => {
-                self.tokens.next(); // consume PLUS
+                self.tokens.next();
                 let left = self.parse_parenthesized(Self::parse_expression)?;
                 let right = self.parse_parenthesized(Self::parse_expression)?;
                 let expr = ArithmeticExpression::Add(left, right);
                 Ok(HashNode::from_store(expr, &self.expression_store))
             }
-            // S, Number, DeBruijn are Term starters
-            Token::Successor | Token::Number(_) | Token::DeBruijn(_) => {
-                let term = self.parse_term()?;
-                let expr = ArithmeticExpression::Term((*term.value).clone());
+            Token::Successor => {
+                self.tokens.next();
+                let inner = self.parse_parenthesized(Self::parse_expression)?;
+                let expr = ArithmeticExpression::Successor(inner);
+                Ok(HashNode::from_store(expr, &self.expression_store))
+            }
+            Token::Number(n) => {
+                self.tokens.next();
+                let expr = ArithmeticExpression::Number(n);
+                Ok(HashNode::from_store(expr, &self.expression_store))
+            }
+            Token::DeBruijn(n) => {
+                self.tokens.next();
+                let expr = ArithmeticExpression::DeBruijn(n);
                 Ok(HashNode::from_store(expr, &self.expression_store))
             }
             _ => Err(format!(
@@ -328,39 +331,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_term(&mut self) -> Result<HashNode<Term>, String> {
-        let token = self.tokens.next().ok_or("Unexpected EOF expecting Term")?;
-        match token {
-            Token::Successor => {
-                // S(<term>) - grammar says S(<term>) but other ops use ( arg )
-                // Let's assume standard function call syntax S(term) or S (term)
-                // The parse_parenthesized expects ( ... )
-                let inner = self.parse_parenthesized(Self::parse_term)?;
-                let term = Term::Successor(inner);
-                Ok(HashNode::from_store(term, &self.term_store))
-            }
-            Token::Number(n) => {
-                let n_node = HashNode::from_store(n, &self.u64_store);
-                let term = Term::Number(n_node);
-                Ok(HashNode::from_store(term, &self.term_store))
-            }
-            Token::DeBruijn(n) => {
-                let n_node = HashNode::from_store(n, &self.u32_store);
-                let term = Term::DeBruijn(n_node);
-                Ok(HashNode::from_store(term, &self.term_store))
-            }
-            _ => Err(format!("Unexpected token {:?} for Term", token)),
-        }
-    }
-
-    pub fn store_stats(&self) -> (usize, usize, usize, usize, usize, usize) {
+    pub fn store_stats(&self) -> (usize, usize, usize) {
         (
             self.peano_store.len(),
             self.expression_store.len(),
-            self.term_store.len(),
             self.logical_store.len(),
-            self.u64_store.len(),
-            self.u32_store.len(),
         )
     }
 }

@@ -14,26 +14,9 @@ name = "corpus-core"
 version = "0.1.0"
 
 [[package]]
-name = "corpus-rewriting"
-version = "0.0.0"
-dependencies = [
- "corpus-core",
- "corpus-unification",
-]
-
-[[package]]
-name = "corpus-unification"
-version = "0.1.0"
-dependencies = [
- "corpus-core",
-]
-
-[[package]]
 name = "peano-arithmetic"
 version = "0.0.0"
 dependencies = [
  "corpus-classical-logic",
  "corpus-core",
- "corpus-rewriting",
- "corpus-unification",
 ]

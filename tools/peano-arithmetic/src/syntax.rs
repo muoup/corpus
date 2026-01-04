@@ -20,14 +20,9 @@ pub enum ArithmeticExpression {
         HashNode<ArithmeticExpression>,
         HashNode<ArithmeticExpression>,
     ),
-    Term(Term),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Term {
-    Successor(HashNode<Term>),
-    Number(HashNode<u64>),
-    DeBruijn(HashNode<u32>),
+    Successor(HashNode<ArithmeticExpression>),
+    Number(u64),
+    DeBruijn(u32),
 }
 
 impl fmt::Display for PeanoContent {
@@ -46,17 +41,9 @@ impl fmt::Display for ArithmeticExpression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ArithmeticExpression::Add(left, right) => write!(f, "({} + {})", left, right),
-            ArithmeticExpression::Term(term) => write!(f, "{}", term),
-        }
-    }
-}
-
-impl fmt::Display for Term {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Term::Successor(inner) => write!(f, "S({})", inner),
-            Term::Number(n) => write!(f, "{}", n),
-            Term::DeBruijn(idx) => write!(f, "/{}", idx),
+            ArithmeticExpression::Successor(inner) => write!(f, "S({})", inner),
+            ArithmeticExpression::Number(n) => write!(f, "{}", n),
+            ArithmeticExpression::DeBruijn(idx) => write!(f, "/{}", idx),
         }
     }
 }
@@ -66,7 +53,7 @@ impl HashNodeInner for PeanoContent {
         match self {
             PeanoContent::Equals(left, right) => {
                 let hashes = vec![left.hash(), right.hash()];
-                Hashing::root_hash(1, &hashes)
+                Hashing::root_hash(Hashing::opcode("equals"), &hashes)
             }
         }
     }
@@ -86,52 +73,36 @@ impl HashNodeInner for ArithmeticExpression {
     fn hash(&self) -> u64 {
         match self {
             ArithmeticExpression::Add(left, right) => {
-                Hashing::root_hash(8, &[left.hash(), right.hash()])
+                Hashing::root_hash(Hashing::opcode("add"), &[left.hash(), right.hash()])
             }
-            ArithmeticExpression::Term(term) => Hashing::root_hash(9, &[term.hash()]),
+            ArithmeticExpression::Successor(inner) => {
+                Hashing::root_hash(Hashing::opcode("successor"), &[inner.hash()])
+            }
+            ArithmeticExpression::Number(n) => Hashing::root_hash(Hashing::opcode("number"), &[*n]),
+            ArithmeticExpression::DeBruijn(idx) => {
+                Hashing::root_hash(Hashing::opcode("debruijn"), &[*idx as u64])
+            }
         }
     }
 
     fn size(&self) -> u64 {
         match self {
             ArithmeticExpression::Add(left, right) => 1 + left.size() + right.size(),
-            ArithmeticExpression::Term(term) => 1 + term.size(),
+            ArithmeticExpression::Successor(inner) => 1 + inner.size(),
+            ArithmeticExpression::Number(_) => 1,
+            ArithmeticExpression::DeBruijn(_) => 1,
         }
     }
 
     fn decompose(&self) -> Option<(u8, Vec<HashNode<Self>>)> {
         match self {
             ArithmeticExpression::Add(left, right) => {
-                Some((8, vec![left.clone(), right.clone()]))
+                Some((Hashing::opcode("add"), vec![left.clone(), right.clone()]))
             }
-            ArithmeticExpression::Term(_) => None,
-        }
-    }
-}
-
-impl HashNodeInner for Term {
-    fn hash(&self) -> u64 {
-        match self {
-            Term::Successor(inner) => Hashing::root_hash(10, &[inner.hash()]),
-            Term::Number(n) => Hashing::root_hash(11, &[*n.value]),
-            Term::DeBruijn(idx) => Hashing::root_hash(12, &[*idx.value as u64]),
-        }
-    }
-
-    fn size(&self) -> u64 {
-        match self {
-            Term::Successor(inner) => 1 + inner.size(),
-            Term::Number(_) => 1,
-            Term::DeBruijn(_) => 1,
-        }
-    }
-
-    fn decompose(&self) -> Option<(u8, Vec<HashNode<Self>>)> {
-        match self {
-            Term::Successor(inner) => {
-                Some((10, vec![inner.clone()]))
+            ArithmeticExpression::Successor(inner) => {
+                Some((Hashing::opcode("successor"), vec![inner.clone()]))
             }
-            Term::Number(_) | Term::DeBruijn(_) => None,
+            ArithmeticExpression::Number(_) | ArithmeticExpression::DeBruijn(_) => None,
         }
     }
 }

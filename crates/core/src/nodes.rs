@@ -94,6 +94,15 @@ impl Hashing {
         }
         result
     }
+
+    pub fn opcode(name: &str) -> u8 {
+        use std::hash::{Hash, Hasher};
+        use std::collections::hash_map::DefaultHasher;
+
+        let mut hasher = DefaultHasher::new();
+        name.hash(&mut hasher);
+        (hasher.finish() % 255) as u8
+    }
 }
 
 // --- Implementations ---
