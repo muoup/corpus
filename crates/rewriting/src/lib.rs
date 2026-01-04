@@ -1,76 +1,92 @@
-use corpus_core::nodes::{HashNode, HashNodeInner};
+use corpus_core::nodes::{HashNode, HashNodeInner, NodeStorage};
+use corpus_unification::{Pattern, Substitution, Unifiable, UnificationError};
 
-pub struct Rewriter<Node: HashNodeInner> {
-    rules: Vec<RewriteRule<Node>>,
+pub enum RewriteDirection {
+    Both,
+    Forward,
+    Backward,
 }
 
-pub struct RewriteResult<'a, Node: HashNodeInner> {
-    input: &'a [Node],
-    allowed_rewrites: Vec<RewriteStep<Node>>,
+pub struct RewriteRule<T: HashNodeInner + Unifiable> {
+    pub name: String,
+    pub pattern: Pattern<T>,
+    pub replacement: Pattern<T>,
+    pub direction: RewriteDirection,
 }
 
-pub struct RewriteRule<Node: HashNodeInner> {
-    pattern: Box<dyn Fn(&[Node]) -> Option<RewriteStep<Node>>>,
+pub struct RewriteResult<T: HashNodeInner> {
+    pub term: HashNode<T>,
+    pub substitution: Substitution,
+    pub rule_name: String,
 }
 
-pub struct RewriteStep<Node: HashNodeInner> {
-    process: Box<dyn Fn(&[Node]) -> HashNode<Node>>,
-}
-
-impl<Node: HashNodeInner> Rewriter<Node> {
-    pub const fn new(rules: Vec<RewriteRule<Node>>) -> Self {
-        Self { rules }
-    }
-
-    pub fn try_apply_rules<'a>(&self, node: &'a [Node]) -> RewriteResult<'a, Node> {
-        RewriteResult {
-            input: node,
-            allowed_rewrites: self
-                .rules
-                .iter()
-                .filter_map(|rule| (rule.pattern)(node))
-                .collect(),
-        }
-    }
-}
-
-impl<Node: HashNodeInner> RewriteResult<'_, Node> {
-    pub const fn get_allowed_rewrites(&self) -> &Vec<RewriteStep<Node>> {
-        &self.allowed_rewrites
-    }
-
-    pub fn apply_rewrite(&self, index: usize) -> Option<HashNode<Node>> {
-        self.allowed_rewrites
-            .get(index)
-            .map(|step| step.apply(self.input))
-    }
-}
-
-impl<Node: HashNodeInner> RewriteRule<Node> {
-    pub fn new<F>(pattern: F) -> Self
-    where
-        F: 'static + Fn(&[Node]) -> Option<RewriteStep<Node>>,
-    {
+impl<T: HashNodeInner + Unifiable> RewriteRule<T> {
+    pub fn new(
+        name: impl Into<String>,
+        pattern: Pattern<T>,
+        replacement: Pattern<T>,
+        direction: RewriteDirection,
+    ) -> Self {
         Self {
-            pattern: Box::new(pattern),
-        }
-    }
-}
-
-impl<Node: HashNodeInner> RewriteStep<Node> {
-    pub fn new<F>(process: F) -> Self
-    where
-        F: 'static + Fn(&[Node]) -> HashNode<Node>,
-    {
-        Self {
-            process: Box::new(process),
+            name: name.into(),
+            pattern,
+            replacement,
+            direction,
         }
     }
 
-    pub fn apply(&self, input: &[Node]) -> HashNode<Node> {
-        (self.process)(input)
+    pub fn bidirectional(name: impl Into<String>, pattern: Pattern<T>, replacement: Pattern<T>) -> Self {
+        Self::new(name, pattern, replacement, RewriteDirection::Both)
+    }
+
+    pub fn try_match(
+        &self,
+        term: &HashNode<T>,
+        store: &NodeStorage<T>,
+    ) -> Result<Substitution, UnificationError> {
+        if matches!(self.direction, RewriteDirection::Backward) {
+            return Err(UnificationError::CannotUnify("Wrong direction".into()));
+        }
+        T::unify(&self.pattern, term, &Substitution::new(), store)
+    }
+
+    pub fn try_match_reverse(
+        &self,
+        term: &HashNode<T>,
+        store: &NodeStorage<T>,
+    ) -> Result<Substitution, UnificationError> {
+        if matches!(self.direction, RewriteDirection::Forward) {
+            return Err(UnificationError::CannotUnify("Wrong direction".into()));
+        }
+        T::unify(&self.replacement, term, &Substitution::new(), store)
+    }
+
+    pub fn is_bidirectional(&self) -> bool {
+        matches!(self.direction, RewriteDirection::Both)
     }
 }
 
-unsafe impl<Node> Send for Rewriter<Node> where Node: HashNodeInner {}
-unsafe impl<Node> Sync for Rewriter<Node> where Node: HashNodeInner {}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use corpus_unification::Pattern;
+
+    #[test]
+    fn test_variable_rule() {
+        let store = NodeStorage::new();
+        let term = HashNode::from_store(42u64, &store);
+        let pattern = Pattern::var(0);
+        let replacement = Pattern::constant(99u64);
+
+        let rule = RewriteRule::new(
+            "test_rule",
+            pattern.clone(),
+            replacement.clone(),
+            RewriteDirection::Both,
+        );
+
+        assert!(rule.try_match(&term, &store).is_ok());
+        assert!(rule.try_match_reverse(&term, &store).is_ok());
+        assert!(rule.is_bidirectional());
+    }
+}

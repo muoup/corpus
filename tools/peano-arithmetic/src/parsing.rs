@@ -166,7 +166,8 @@ pub struct Parser<'a> {
     peano_store: NodeStorage<PeanoExpression>,
     expression_store: NodeStorage<ArithmeticExpression>,
     term_store: NodeStorage<Term>,
-    logical_store: NodeStorage<LogicalExpression<BinaryTruth, ClassicalOperator>>,
+    content_store: NodeStorage<PeanoContent>,
+    logical_store: NodeStorage<LogicalExpression<BinaryTruth, PeanoContent, ClassicalOperator>>,
     u64_store: NodeStorage<u64>,
     u32_store: NodeStorage<u32>,
 }
@@ -178,6 +179,7 @@ impl<'a> Parser<'a> {
             peano_store: NodeStorage::new(),
             expression_store: NodeStorage::new(),
             term_store: NodeStorage::new(),
+            content_store: NodeStorage::new(),
             logical_store: NodeStorage::new(),
             u64_store: NodeStorage::new(),
             u32_store: NodeStorage::new(),
@@ -217,12 +219,12 @@ impl<'a> Parser<'a> {
                 let logical_expr = LogicalExpression::compound(
                     ClassicalOperator::And,
                     vec![
-                        left.value.as_logical().unwrap().clone().into(),
-                        right.value.as_logical().unwrap().clone().into(),
+                        left.value.as_logical(&self.logical_store),
+                        right.value.as_logical(&self.logical_store),
                     ],
                 );
-                let content = PeanoContent::Logical(logical_expr);
-                let peano_expr = PeanoExpression::domain(content);
+                let logical_node = HashNode::from_store(logical_expr, &self.logical_store);
+                let peano_expr = PeanoExpression::logical(logical_node);
                 Ok(HashNode::from_store(peano_expr, &self.peano_store))
             }
             Token::Or => {
@@ -231,12 +233,12 @@ impl<'a> Parser<'a> {
                 let logical_expr = LogicalExpression::compound(
                     ClassicalOperator::Or,
                     vec![
-                        left.value.as_logical().unwrap().clone().into(),
-                        right.value.as_logical().unwrap().clone().into(),
+                        left.value.as_logical(&self.logical_store),
+                        right.value.as_logical(&self.logical_store),
                     ],
                 );
-                let content = PeanoContent::Logical(logical_expr);
-                let peano_expr = PeanoExpression::domain(content);
+                let logical_node = HashNode::from_store(logical_expr, &self.logical_store);
+                let peano_expr = PeanoExpression::logical(logical_node);
                 Ok(HashNode::from_store(peano_expr, &self.peano_store))
             }
             Token::Implies => {
@@ -245,49 +247,49 @@ impl<'a> Parser<'a> {
                 let logical_expr = LogicalExpression::compound(
                     ClassicalOperator::Implies,
                     vec![
-                        left.value.as_logical().unwrap().clone().into(),
-                        right.value.as_logical().unwrap().clone().into(),
+                        left.value.as_logical(&self.logical_store),
+                        right.value.as_logical(&self.logical_store),
                     ],
                 );
-                let content = PeanoContent::Logical(logical_expr);
-                let peano_expr = PeanoExpression::domain(content);
+                let logical_node = HashNode::from_store(logical_expr, &self.logical_store);
+                let peano_expr = PeanoExpression::logical(logical_node);
                 Ok(HashNode::from_store(peano_expr, &self.peano_store))
             }
             Token::Not => {
                 let inner = self.parse_parenthesized(Self::parse_proposition)?;
                 let logical_expr = LogicalExpression::compound(
                     ClassicalOperator::Not,
-                    vec![inner.value.as_logical().unwrap().clone().into()],
+                    vec![inner.value.as_logical(&self.logical_store)],
                 );
-                let content = PeanoContent::Logical(logical_expr);
-                let peano_expr = PeanoExpression::domain(content);
+                let logical_node = HashNode::from_store(logical_expr, &self.logical_store);
+                let peano_expr = PeanoExpression::logical(logical_node);
                 Ok(HashNode::from_store(peano_expr, &self.peano_store))
             }
             Token::Forall => {
                 let inner = self.parse_parenthesized(Self::parse_proposition)?;
                 let logical_expr = LogicalExpression::compound(
                     ClassicalOperator::Forall,
-                    vec![inner.value.as_logical().unwrap().clone().into()],
+                    vec![inner.value.as_logical(&self.logical_store)],
                 );
-                let content = PeanoContent::Logical(logical_expr);
-                let peano_expr = PeanoExpression::domain(content);
+                let logical_node = HashNode::from_store(logical_expr, &self.logical_store);
+                let peano_expr = PeanoExpression::logical(logical_node);
                 Ok(HashNode::from_store(peano_expr, &self.peano_store))
             }
             Token::Exists => {
                 let inner = self.parse_parenthesized(Self::parse_proposition)?;
                 let logical_expr = LogicalExpression::compound(
                     ClassicalOperator::Exists,
-                    vec![inner.value.as_logical().unwrap().clone().into()],
+                    vec![inner.value.as_logical(&self.logical_store)]
                 );
-                let content = PeanoContent::Logical(logical_expr);
-                let peano_expr = PeanoExpression::domain(content);
+                let logical_node = HashNode::from_store(logical_expr, &self.logical_store);
+                let peano_expr = PeanoExpression::logical(logical_node);
                 Ok(HashNode::from_store(peano_expr, &self.peano_store))
             }
             Token::Eq => {
                 let left = self.parse_parenthesized(Self::parse_expression)?;
                 let right = self.parse_parenthesized(Self::parse_expression)?;
-                let content = PeanoContent::Equals(left, right);
-                let peano_expr = PeanoExpression::domain(content);
+                let content_node = HashNode::from_store(PeanoContent::Equals(left, right), &self.content_store);
+                let peano_expr = PeanoExpression::domain(content_node);
                 Ok(HashNode::from_store(peano_expr, &self.peano_store))
             }
             _ => Err(format!(

@@ -18,7 +18,6 @@ pub struct Hashing;
 #[derive(Debug)]
 pub struct HashNode<T: HashNodeInner> {
     pub value: Rc<T>,
-    pub hash: u64,
 }
 
 pub struct NodeStorage<T: HashNodeInner> {
@@ -41,7 +40,6 @@ impl<T: HashNodeInner> NodeStorage<T> {
         } else {
             let node = HashNode {
                 value: Rc::new(value),
-                hash,
             };
             nodes.insert(hash, node.clone());
             node
@@ -67,6 +65,10 @@ impl<T: HashNodeInner> NodeStorage<T> {
 impl<T: HashNodeInner> HashNode<T> {
     pub fn size(&self) -> u64 {
         self.value.size()
+    }
+    
+    pub fn hash(&self) -> u64 {
+        self.value.hash()
     }
 }
 
@@ -120,15 +122,14 @@ impl<T: HashNodeInner + Clone> Default for NodeStorage<T> {
 impl<T: HashNodeInner> Clone for HashNode<T> {
     fn clone(&self) -> Self {
         Self {
-            value: self.value.clone(),
-            hash: self.hash,
+            value: self.value.clone()
         }
     }
 }
 
 impl<T: HashNodeInner> PartialEq for HashNode<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.hash == other.hash
+        self.value.hash() == other.value.hash()
     }
 }
 
@@ -140,17 +141,7 @@ impl<T: Display + HashNodeInner> Display for HashNode<T> {
 
 impl<T: HashNodeInner> Hash for HashNode<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u64(self.hash);
-    }
-}
-
-impl<T: HashNodeInner> From<T> for HashNode<T> {
-    fn from(value: T) -> Self {
-        let hash = value.hash();
-        HashNode {
-            value: Rc::new(value),
-            hash,
-        }
+        state.write_u64(self.value.hash());
     }
 }
 

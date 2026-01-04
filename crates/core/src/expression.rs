@@ -1,32 +1,39 @@
 use crate::logic::LogicalOperator;
-use crate::nodes::{HashNode, HashNodeInner, Hashing};
+use crate::nodes::{HashNode, HashNodeInner, Hashing, NodeStorage};
 use crate::truth::TruthValue;
 use std::fmt::{Display, Formatter};
+use std::marker::PhantomData;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum LogicalExpression<T: TruthValue, Op: LogicalOperator<T>>
+pub enum LogicalExpression<T: TruthValue, D: DomainContent<T>, Op: LogicalOperator<T>>
 where
     T: HashNodeInner,
     Op: HashNodeInner,
 {
-    Atomic(T),
+    Atomic(HashNode<D>),
     Compound {
         operator: Op,
         operands: Vec<HashNode<Self>>,
+
+        _phantom: std::marker::PhantomData<T>,
     },
 }
 
-impl<T: TruthValue, Op: LogicalOperator<T>> LogicalExpression<T, Op>
+impl<T: TruthValue, D: DomainContent<T>, Op: LogicalOperator<T>> LogicalExpression<T, D, Op>
 where
     T: HashNodeInner,
     Op: HashNodeInner,
 {
-    pub fn atomic(value: T) -> Self {
+    pub fn atomic(value: HashNode<D>) -> Self {
         LogicalExpression::Atomic(value)
     }
 
     pub fn compound(operator: Op, operands: Vec<HashNode<Self>>) -> Self {
-        LogicalExpression::Compound { operator, operands }
+        LogicalExpression::Compound {
+            operator,
+            operands,
+            _phantom: PhantomData::default(),
+        }
     }
 
     pub fn is_atomic(&self) -> bool {
@@ -50,28 +57,21 @@ where
             _ => None,
         }
     }
-
-    pub fn evaluate(&self) -> T {
-        match self {
-            LogicalExpression::Atomic(value) => value.clone(),
-            LogicalExpression::Compound { operator, operands } => {
-                let evaluated_operands: Vec<T> =
-                    operands.iter().map(|node| node.value.evaluate()).collect();
-                operator.apply(&evaluated_operands)
-            }
-        }
-    }
 }
 
-impl<T: TruthValue, Op: LogicalOperator<T>> Display for LogicalExpression<T, Op>
+impl<T: TruthValue, D: DomainContent<T>, Op: LogicalOperator<T>> Display
+    for LogicalExpression<T, D, Op>
 where
+    D: Display + HashNodeInner,
     T: Display + HashNodeInner,
     Op: Display + HashNodeInner,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             LogicalExpression::Atomic(value) => write!(f, "{}", value),
-            LogicalExpression::Compound { operator, operands } => {
+            LogicalExpression::Compound {
+                operator, operands, ..
+            } => {
                 if operator.is_unary() {
                     write!(f, "({} {})", operator, &operands[0])
                 } else if operator.is_binary() {
@@ -93,7 +93,8 @@ where
     }
 }
 
-impl<T: TruthValue, Op: LogicalOperator<T>> HashNodeInner for LogicalExpression<T, Op>
+impl<T: TruthValue, D: DomainContent<T>, Op: LogicalOperator<T>> HashNodeInner
+    for LogicalExpression<T, D, Op>
 where
     T: HashNodeInner,
     Op: HashNodeInner,
@@ -101,9 +102,11 @@ where
     fn hash(&self) -> u64 {
         match self {
             LogicalExpression::Atomic(value) => Hashing::root_hash(0, &[value.hash()]),
-            LogicalExpression::Compound { operator, operands } => {
+            LogicalExpression::Compound {
+                operator, operands, ..
+            } => {
                 let mut all_hashes = vec![operator.hash()];
-                all_hashes.extend(operands.iter().map(|node| node.hash));
+                all_hashes.extend(operands.iter().map(|node| node.hash()));
                 Hashing::root_hash(1, &all_hashes)
             }
         }
@@ -112,9 +115,9 @@ where
     fn size(&self) -> u64 {
         match self {
             LogicalExpression::Atomic(value) => 1 + value.size(),
-            LogicalExpression::Compound { operator, operands } => {
-                1 + operator.size() + operands.iter().map(|node| node.size()).sum::<u64>()
-            }
+            LogicalExpression::Compound {
+                operator, operands, ..
+            } => 1 + operator.size() + operands.iter().map(|node| node.size()).sum::<u64>(),
         }
     }
 }
@@ -125,8 +128,8 @@ where
     T: HashNodeInner,
     D: HashNodeInner,
 {
-    Domain(D),
-    Logical(LogicalExpression<T, D::Operator>),
+    Domain(HashNode<D>),
+    Logical(HashNode<LogicalExpression<T, D, D::Operator>>),
 }
 
 impl<T: TruthValue, D: DomainContent<T>> DomainExpression<T, D>
@@ -134,11 +137,11 @@ where
     T: HashNodeInner,
     D: HashNodeInner,
 {
-    pub fn domain(content: D) -> Self {
+    pub fn domain(content: HashNode<D>) -> Self {
         DomainExpression::Domain(content)
     }
 
-    pub fn logical(expr: LogicalExpression<T, D::Operator>) -> Self {
+    pub fn logical(expr: HashNode<LogicalExpression<T, D, D::Operator>>) -> Self {
         DomainExpression::Logical(expr)
     }
 
@@ -150,17 +153,22 @@ where
         matches!(self, DomainExpression::Logical(_))
     }
 
-    pub fn as_domain(&self) -> Option<&D> {
+    pub fn as_domain(&self) -> Option<&HashNode<D>> {
         match self {
             DomainExpression::Domain(content) => Some(content),
             _ => None,
         }
     }
 
-    pub fn as_logical(&self) -> Option<&LogicalExpression<T, D::Operator>> {
+    pub fn as_logical(
+        &self,
+        storage: &NodeStorage<LogicalExpression<T, D, D::Operator>>,
+    ) -> HashNode<LogicalExpression<T, D, D::Operator>> {
         match self {
-            DomainExpression::Logical(expr) => Some(expr),
-            _ => None,
+            DomainExpression::Logical(expr) => expr.clone(),
+            DomainExpression::Domain(domain) => {
+                HashNode::from_store(LogicalExpression::atomic(domain.clone()), storage)
+            }
         }
     }
 }

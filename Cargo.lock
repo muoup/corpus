@@ -18,6 +18,14 @@ name = "corpus-rewriting"
 version = "0.0.0"
 dependencies = [
  "corpus-core",
+ "corpus-unification",
+]
+
+[[package]]
+name = "corpus-unification"
+version = "0.1.0"
+dependencies = [
+ "corpus-core",
 ]
 
 [[package]]
@@ -27,4 +35,5 @@ dependencies = [
  "corpus-classical-logic",
  "corpus-core",
  "corpus-rewriting",
+ "corpus-unification",
 ]
