@@ -174,7 +174,11 @@ pub trait ProofResultExt {
 
 impl ProofResultExt for ProofResult<PeanoContent, BinaryTruth> {
     fn print(&self) {
-        println!("✓ Theorem proved!");
+        if self.truth_result == BinaryTruth::False {
+            println!("✗ Statement disproved (contradiction)!");
+        } else {
+            println!("✓ Theorem proved!");
+        }
         println!("Nodes explored: {}", self.nodes_explored);
         println!();
 
@@ -187,6 +191,6 @@ impl ProofResultExt for ProofResult<PeanoContent, BinaryTruth> {
             println!();
         }
 
-        println!("Final: {} ✓", self.final_expr);
+        println!("Final: {} {}", self.final_expr, if self.truth_result == BinaryTruth::False { "✗" } else { "✓" });
     }
 }
