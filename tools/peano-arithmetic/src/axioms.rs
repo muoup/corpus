@@ -1,10 +1,9 @@
 use corpus_core::nodes::{Hashing};
-use crate::syntax::ArithmeticExpression;
-use corpus_core::rewriting::{RewriteRule, Pattern};
+use crate::syntax::{ArithmeticExpression, PeanoContent};
+use corpus_core::rewriting::{RewriteRule, Pattern, RewriteDirection};
 
 pub fn peano_arithmetic_rules() -> Vec<RewriteRule<ArithmeticExpression>> {
     vec![
-        axiom2_rule(),
         axiom3_rule(),
         axiom4_rule(),
     ]
@@ -29,7 +28,7 @@ fn axiom3_rule() -> RewriteRule<ArithmeticExpression> {
 
     let replacement = x;
 
-    RewriteRule::bidirectional("axiom3_additive_identity", pattern, replacement)
+    RewriteRule::new("axiom3_additive_identity", pattern, replacement, RewriteDirection::Forward)
 }
 
 fn axiom4_rule() -> RewriteRule<ArithmeticExpression> {
@@ -41,7 +40,7 @@ fn axiom4_rule() -> RewriteRule<ArithmeticExpression> {
     let x_plus_y = Pattern::compound(Hashing::opcode("add"), vec![x, y]);
     let replacement = Pattern::compound(Hashing::opcode("successor"), vec![x_plus_y]);
 
-    RewriteRule::bidirectional("axiom4_additive_successor", pattern, replacement)
+    RewriteRule::new("axiom4_additive_successor", pattern, replacement, RewriteDirection::Forward)
 }
 
 #[cfg(test)]
@@ -51,6 +50,6 @@ mod tests {
     #[test]
     fn test_axiom_rules_creation() {
         let rules = peano_arithmetic_rules();
-        assert_eq!(rules.len(), 3);
+        assert_eq!(rules.len(), 2);
     }
 }

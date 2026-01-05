@@ -1,4 +1,4 @@
-use crate::base::nodes::HashNodeInner;
+use crate::base::nodes::{HashNode, HashNodeInner};
 use std::fmt::{self, Debug, Display};
 
 pub enum QuantifierType {
@@ -79,6 +79,44 @@ impl<T: HashNodeInner + Clone> Pattern<T> {
             Pattern::Constant(t) => t.size() as usize,
             Pattern::Compound { args, .. } => {
                 1 + args.iter().map(|a| a.size()).sum::<usize>()
+            }
+        }
+    }
+
+    /// Check if this pattern matches the given expression.
+    ///
+    /// This performs structural matching where:
+    /// - Variables match any expression
+    /// - Wildcards match any expression
+    /// - Constants match expressions with the same hash
+    /// - Compound patterns match expressions with the same opcode and matching children
+    ///
+    /// Unlike unification, this does not produce a substitution - it only checks
+    /// whether a match is possible.
+    pub fn matches(&self, expr: &HashNode<T>) -> bool {
+        match self {
+            Pattern::Variable(_) | Pattern::Wildcard => true,
+            Pattern::Constant(c) => c.hash() == expr.hash(),
+            Pattern::Compound { opcode, args } => {
+                // Try to decompose the expression
+                let Some((expr_opcode, expr_children)) = expr.value.decompose() else {
+                    return false;
+                };
+
+                // Check opcode matches
+                if opcode != &expr_opcode {
+                    return false;
+                }
+
+                // Check number of children matches
+                if args.len() != expr_children.len() {
+                    return false;
+                }
+
+                // Recursively check each arg matches the corresponding child
+                args.iter()
+                    .zip(expr_children.iter())
+                    .all(|(pattern, child)| pattern.matches(child))
             }
         }
     }

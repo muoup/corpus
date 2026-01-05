@@ -211,3 +211,8 @@ where
         }
     }
 }
+
+// NOTE: Cross-level rewrite rules for DomainExpression are not implemented via
+// the generic Unifiable trait due to type system limitations. Instead, use
+// specialized rewrite functions like apply_successor_injectivity in the
+// domain-specific modules (e.g., tools/peano-arithmetic/src/syntax.rs).

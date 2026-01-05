@@ -156,8 +156,14 @@ impl Hasher for IdentityHasher {
         self.hash = i;
     }
 
-    fn write(&mut self, _: &[u8]) {
-        unimplemented!()
+    fn write(&mut self, bytes: &[u8]) {
+        // For identity hashing, we combine bytes into the hash using a simple mixing approach
+        // Since this is used as a HashMap key with BuildHasherDefault<IdentityHasher>,
+        // the keys are pre-hashed u64 values, but write() may be called in some edge cases.
+        // We'll use a simple fold to combine the bytes.
+        for &byte in bytes {
+            self.hash = self.hash.wrapping_mul(31).wrapping_add(byte as u64);
+        }
     }
 }
 

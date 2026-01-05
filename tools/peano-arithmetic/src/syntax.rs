@@ -3,6 +3,7 @@ use core::fmt;
 use corpus_classical_logic::{BinaryTruth, ClassicalOperator};
 use corpus_core::expression::{DomainContent, DomainExpression};
 use corpus_core::nodes::{HashNode, HashNodeInner, NodeStorage, Hashing};
+use corpus_core::rewriting::RewriteRule;
 
 pub type PeanoExpression = DomainExpression<BinaryTruth, PeanoContent>;
 
@@ -66,6 +67,35 @@ impl HashNodeInner for PeanoContent {
 
     fn decompose(&self) -> Option<(u64, Vec<HashNode<Self>>)> {
         None
+    }
+
+    fn rewrite_any_subterm<F>(
+        &self,
+        node: &HashNode<Self>,
+        store: &NodeStorage<Self>,
+        try_rewrite: &F,
+    ) -> Option<HashNode<Self>>
+    where
+        F: Fn(&HashNode<Self>) -> Option<HashNode<Self>>,
+    {
+        // Try rewriting the full equality first
+        if let Some(rewritten) = try_rewrite(node) {
+            return Some(rewritten);
+        }
+
+        // Then try rewriting subterms (the arithmetic expressions on each side)
+        match self {
+            PeanoContent::Equals(left, right) => {
+                // Note: We can't directly call try_rewrite on left/right because they
+                // are HashNode<ArithmeticExpression> but try_rewrite expects HashNode<PeanoContent>.
+                // This will be handled by creating wrapper rewrite rules that know how to
+                // apply arithmetic rules to equality subterms.
+                //
+                // For now, this method just tries the top-level rewrite. The subterm rewriting
+                // will be handled by the wrapper rules created by wrap_arithmetic_rule_for_equality.
+                None
+            }
+        }
     }
 }
 
@@ -183,5 +213,126 @@ impl HashNodeInner for ArithmeticExpression {
             }
             _ => None,
         }
+    }
+}
+
+/// Get all possible rewrites of a PeanoContent (equality) by applying
+/// arithmetic rewrite rules to its subterms.
+///
+/// This function takes a list of arithmetic rewrite rules and applies them
+/// to both the left and right sides of the equality, generating new equalities.
+pub fn get_all_rewrites_for_equality(
+    equality: &HashNode<PeanoContent>,
+    _store: &NodeStorage<PeanoContent>,
+    arithmetic_rules: &[RewriteRule<ArithmeticExpression>],
+) -> Vec<HashNode<PeanoContent>> {
+    let mut rewrites = Vec::new();
+
+    if let PeanoContent::Equals(left, right) = equality.value.as_ref() {
+        // Create an arithmetic expression store for applying rules
+        let arith_store = NodeStorage::<ArithmeticExpression>::new();
+
+        // Try applying each arithmetic rule to the left subterm
+        for rule in arithmetic_rules {
+            // Forward direction: apply pattern to get replacement
+            if let Some(new_left) = rule.apply(left, &arith_store) {
+                let new_content = PeanoContent::Equals(new_left, right.clone());
+                rewrites.push(HashNode::from_store(new_content, _store));
+            }
+
+            // Reverse direction: apply replacement to get pattern
+            if let Some(new_left) = rule.apply_reverse(left, &arith_store) {
+                let new_content = PeanoContent::Equals(new_left, right.clone());
+                rewrites.push(HashNode::from_store(new_content, _store));
+            }
+
+            // Try the right subterm too
+            if let Some(new_right) = rule.apply(right, &arith_store) {
+                let new_content = PeanoContent::Equals(left.clone(), new_right);
+                rewrites.push(HashNode::from_store(new_content, _store));
+            }
+
+            if let Some(new_right) = rule.apply_reverse(right, &arith_store) {
+                let new_content = PeanoContent::Equals(left.clone(), new_right);
+                rewrites.push(HashNode::from_store(new_content, _store));
+            }
+        }
+    }
+
+    rewrites
+}
+
+/// Wrapper for compatibility - wraps arithmetic rules for use with equalities.
+///
+/// This creates dummy RewriteRule<PeanoContent> entries that can be added to the prover.
+/// The actual rewriting logic is in get_all_rewrites_for_equality.
+pub fn wrap_arithmetic_rules_for_equality(
+    rules: Vec<RewriteRule<ArithmeticExpression>>,
+) -> Vec<RewriteRule<PeanoContent>> {
+    // For now, create dummy wildcard rules - the actual rewriting
+    // will be handled by a custom implementation in the prover
+    rules.into_iter().map(|rule| {
+        RewriteRule::bidirectional(
+            rule.name.clone(),
+            corpus_core::rewriting::Pattern::Wildcard,
+            corpus_core::rewriting::Pattern::Wildcard,
+        )
+    }).collect()
+}
+
+// Implement pattern extraction traits for cross-level rewrite rules
+
+use corpus_core::base::pattern_traits::{EqualityExtractable, SuccessorExtractable, AddExtractable};
+
+impl EqualityExtractable for PeanoContent {
+    type SubExpr = ArithmeticExpression;
+
+    fn as_equals(&self) -> Option<(&HashNode<ArithmeticExpression>, &HashNode<ArithmeticExpression>)> {
+        match self {
+            PeanoContent::Equals(left, right) => Some((left, right)),
+        }
+    }
+}
+
+impl SuccessorExtractable for ArithmeticExpression {
+    type SubExpr = ArithmeticExpression;
+
+    fn as_successor(&self) -> Option<&HashNode<ArithmeticExpression>> {
+        match self {
+            ArithmeticExpression::Successor(inner) => Some(inner),
+            _ => None,
+        }
+    }
+}
+
+impl AddExtractable for ArithmeticExpression {
+    type SubExpr = ArithmeticExpression;
+
+    fn as_add(&self) -> Option<(&HashNode<ArithmeticExpression>, &HashNode<ArithmeticExpression>)> {
+        match self {
+            ArithmeticExpression::Add(left, right) => Some((left, right)),
+            _ => None,
+        }
+    }
+}
+
+/// Apply successor injectivity rewrite: S(x) = S(y) -> x = y
+///
+/// If both sides of the equality are successor expressions, rewrite to
+/// the equality of their inner terms.
+pub fn apply_successor_injectivity(
+    equality: &HashNode<PeanoContent>,
+    store: &NodeStorage<PeanoContent>,
+) -> Option<HashNode<PeanoContent>> {
+    if let PeanoContent::Equals(left, right) = equality.value.as_ref() {
+        // Check if both sides are Successor expressions
+        let left_inner = left.value.as_successor()?;
+        let right_inner = right.value.as_successor()?;
+
+        // Create new equality: left_inner = right_inner
+        let new_content = PeanoContent::Equals(left_inner.clone(), right_inner.clone());
+        Some(HashNode::from_store(new_content, store))
+    } else {
+        None
     }
 }

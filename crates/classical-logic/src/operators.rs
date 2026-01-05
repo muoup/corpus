@@ -63,6 +63,7 @@ impl<T: TruthValue> corpus_core::logic::LogicalOperator<T> for ClassicalOperator
 impl corpus_core::nodes::HashNodeInner for ClassicalOperator {
     fn hash(&self) -> u64 {
         match self {
+            ClassicalOperator::Equals => 0,
             ClassicalOperator::And => 1,
             ClassicalOperator::Or => 2,
             ClassicalOperator::Implies => 3,
