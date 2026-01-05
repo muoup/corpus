@@ -32,6 +32,18 @@ pub trait HashNodeInner: Sized {
         // Default: just try rewriting the top-level node
         try_rewrite(node)
     }
+
+    /// Construct an expression from an opcode and children.
+    ///
+    /// Returns `None` if the opcode is not valid for this type or if this type
+    /// does not support compound expressions.
+    fn construct_from_parts(
+        _opcode: u8,
+        _children: Vec<HashNode<Self>>,
+        _store: &NodeStorage<Self>,
+    ) -> Option<HashNode<Self>> {
+        None
+    }
 }
 
 pub struct Hashing;
@@ -75,6 +87,11 @@ impl<T: HashNodeInner> NodeStorage<T> {
     pub fn len(&self) -> usize {
         let nodes = self.nodes.read().unwrap();
         nodes.len()
+    }
+    
+    pub fn is_empty(&self) -> bool {
+        let nodes = self.nodes.read().unwrap();
+        nodes.is_empty()
     }
 
     pub fn clear(&self) {

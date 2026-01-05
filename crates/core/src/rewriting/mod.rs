@@ -1,5 +1,4 @@
 use crate::base::nodes::{HashNode, HashNodeInner, NodeStorage};
-use crate::base::opcodes::OpcodeMapper;
 
 pub mod pattern;
 pub mod substitution;
@@ -16,74 +15,67 @@ pub enum RewriteDirection {
     Backward,
 }
 
-/// A rewrite rule with a stored opcode mapper for generic expression construction.
-///
-/// The `OpcodeMapper` allows this rule to work with any domain's expression types
-/// without requiring hard-coded `construct_compound` functions.
+/// A rewrite rule for term transformation.
 ///
 /// # Type Parameters
 ///
-/// * `T` - The expression type (must implement `HashNodeInner` and `Unifiable`)
-/// * `M` - The opcode mapper type (must implement `OpcodeMapper<T>`)
-pub struct RewriteRule<T: HashNodeInner + Unifiable, M: OpcodeMapper<T>> {
+/// * `Node` - The expression type (must implement `HashNodeInner` and `Unifiable`)
+pub struct RewriteRule<Node: HashNodeInner + Unifiable> {
     pub name: String,
-    pub pattern: Pattern<T>,
-    pub replacement: Pattern<T>,
+    pub pattern: Pattern<Node>,
+    pub replacement: Pattern<Node>,
     pub direction: RewriteDirection,
-    mapper: M,
 }
 
-pub struct RewriteResult<T: HashNodeInner> {
-    pub term: HashNode<T>,
-    pub substitution: Substitution<T>,
+pub struct RewriteResult<Node: HashNodeInner> {
+    pub term: HashNode<Node>,
+    pub substitution: Substitution<Node>,
     pub rule_name: String,
 }
 
-impl<T: HashNodeInner + Unifiable, M: OpcodeMapper<T>> RewriteRule<T, M> {
-    /// Create a new rewrite rule with the given mapper.
+impl<Node: HashNodeInner + Unifiable> RewriteRule<Node> {
+    /// Create a new rewrite rule.
     pub fn new(
         name: impl Into<String>,
-        pattern: Pattern<T>,
-        replacement: Pattern<T>,
+        pattern: Pattern<Node>,
+        replacement: Pattern<Node>,
         direction: RewriteDirection,
-        mapper: M,
     ) -> Self {
         Self {
             name: name.into(),
             pattern,
             replacement,
             direction,
-            mapper,
         }
     }
 
     /// Create a bidirectional rewrite rule.
-    pub fn bidirectional(name: impl Into<String>, pattern: Pattern<T>, replacement: Pattern<T>, mapper: M) -> Self {
-        Self::new(name, pattern, replacement, RewriteDirection::Both, mapper)
+    pub fn bidirectional(name: impl Into<String>, pattern: Pattern<Node>, replacement: Pattern<Node>) -> Self {
+        Self::new(name, pattern, replacement, RewriteDirection::Both)
     }
 
     /// Try to match the pattern against a term (forward direction).
     pub fn try_match(
         &self,
-        term: &HashNode<T>,
-        store: &NodeStorage<T>,
-    ) -> Result<Substitution<T>, UnificationError> {
+        term: &HashNode<Node>,
+        store: &NodeStorage<Node>,
+    ) -> Result<Substitution<Node>, UnificationError> {
         if matches!(self.direction, RewriteDirection::Backward) {
             return Err(UnificationError::CannotUnify("Wrong direction".into()));
         }
-        T::unify(&self.pattern, term, &Substitution::new(), store)
+        Node::unify(&self.pattern, term, &Substitution::new(), store)
     }
 
     /// Try to match the replacement against a term (reverse direction).
     pub fn try_match_reverse(
         &self,
-        term: &HashNode<T>,
-        store: &NodeStorage<T>,
-    ) -> Result<Substitution<T>, UnificationError> {
+        term: &HashNode<Node>,
+        store: &NodeStorage<Node>,
+    ) -> Result<Substitution<Node>, UnificationError> {
         if matches!(self.direction, RewriteDirection::Forward) {
             return Err(UnificationError::CannotUnify("Wrong direction".into()));
         }
-        T::unify(&self.replacement, term, &Substitution::new(), store)
+        Node::unify(&self.replacement, term, &Substitution::new(), store)
     }
 
     /// Check if this rule is bidirectional.
@@ -94,9 +86,9 @@ impl<T: HashNodeInner + Unifiable, M: OpcodeMapper<T>> RewriteRule<T, M> {
     /// Apply this rule to a term (forward direction).
     pub fn apply(
         &self,
-        term: &HashNode<T>,
-        store: &NodeStorage<T>,
-    ) -> Option<HashNode<T>> {
+        term: &HashNode<Node>,
+        store: &NodeStorage<Node>,
+    ) -> Option<HashNode<Node>> {
         if matches!(self.direction, RewriteDirection::Backward) {
             return None;
         }
@@ -106,16 +98,15 @@ impl<T: HashNodeInner + Unifiable, M: OpcodeMapper<T>> RewriteRule<T, M> {
             &self.replacement,
             &subst,
             store,
-            &self.mapper,
         ))
     }
 
     /// Apply this rule to a term (reverse direction).
     pub fn apply_reverse(
         &self,
-        term: &HashNode<T>,
-        store: &NodeStorage<T>,
-    ) -> Option<HashNode<T>> {
+        term: &HashNode<Node>,
+        store: &NodeStorage<Node>,
+    ) -> Option<HashNode<Node>> {
         if matches!(self.direction, RewriteDirection::Forward) {
             return None;
         }
@@ -125,21 +116,19 @@ impl<T: HashNodeInner + Unifiable, M: OpcodeMapper<T>> RewriteRule<T, M> {
             &self.pattern,
             &subst,
             store,
-            &self.mapper,
         ))
     }
 }
 
-/// Apply a substitution to a pattern using an opcode mapper.
-fn apply_substitution_to_pattern<T: HashNodeInner + Clone, M: OpcodeMapper<T>>(
+/// Apply a substitution to a pattern.
+fn apply_substitution_to_pattern<T: HashNodeInner + Clone>(
     pattern: &Pattern<T>,
     subst: &Substitution<T>,
     store: &NodeStorage<T>,
-    mapper: &M,
 ) -> HashNode<T> {
     match pattern {
         Pattern::Variable(idx) => {
-            subst.get(*idx).cloned().expect(&format!("Variable /{} should be bound in substitution", idx))
+            subst.get(*idx).cloned().unwrap_or_else(|| panic!("Variable /{} should be bound in substitution", idx))
         }
         Pattern::Wildcard => {
             panic!("Wildcard should not appear in replacement pattern")
@@ -148,9 +137,12 @@ fn apply_substitution_to_pattern<T: HashNodeInner + Clone, M: OpcodeMapper<T>>(
         Pattern::Compound { opcode, args } => {
             let substituted_args: Vec<HashNode<T>> = args
                 .iter()
-                .map(|arg| apply_substitution_to_pattern(arg, subst, store, mapper))
+                .map(|arg| apply_substitution_to_pattern(arg, subst, store))
                 .collect();
-            mapper.construct(*opcode, substituted_args, store)
+            let len = substituted_args.len();
+            T::construct_from_parts(*opcode, substituted_args, store).unwrap_or_else(|| {
+                panic!("Invalid opcode: {} with {} children", opcode, len)
+            })
         }
     }
 }
@@ -159,20 +151,6 @@ fn apply_substitution_to_pattern<T: HashNodeInner + Clone, M: OpcodeMapper<T>>(
 mod tests {
     use super::*;
 
-    // A simple test mapper for u64 (no compound expressions)
-    struct TestMapper;
-    impl OpcodeMapper<u64> for TestMapper {
-        fn construct(&self, _opcode: u8, _children: Vec<HashNode<u64>>, _store: &NodeStorage<u64>) -> HashNode<u64> {
-            panic!("u64 has no compound expressions")
-        }
-        fn get_opcode(&self, _expr: &HashNode<u64>) -> Option<u8> {
-            None
-        }
-        fn is_valid_opcode(&self, _opcode: u8) -> bool {
-            false
-        }
-    }
-
     #[test]
     fn test_variable_rule() {
         let store = NodeStorage::new();
@@ -180,13 +158,10 @@ mod tests {
         let pattern = Pattern::var(0);
         let replacement = Pattern::constant(42u64);
 
-        let mapper = TestMapper;
-        let rule = RewriteRule::new(
+        let rule = RewriteRule::bidirectional(
             "test_rule",
             pattern.clone(),
             replacement.clone(),
-            RewriteDirection::Both,
-            mapper,
         );
 
         // Forward: match pattern (var 0) against term (42) - should succeed

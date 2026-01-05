@@ -7,18 +7,6 @@ pub trait LogicalOperator<T: TruthValue>: Clone + Debug + Send + Sync {
     fn symbol(&self) -> Self::Symbol;
     fn arity(&self) -> usize;
     fn apply(&self, operands: &[T]) -> T;
-
-    fn is_unary(&self) -> bool {
-        self.arity() == 1
-    }
-
-    fn is_binary(&self) -> bool {
-        self.arity() == 2
-    }
-
-    fn is_nary(&self) -> bool {
-        self.arity() > 2
-    }
 }
 
 pub struct LogicalOperatorSet<T: TruthValue, Op: LogicalOperator<T>> {

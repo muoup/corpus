@@ -2,10 +2,9 @@ use corpus_core::nodes::{HashNode, NodeStorage};
 use corpus_core::rewriting::RewriteRule;
 
 use crate::syntax::ArithmeticExpression;
-use crate::opcodes::PeanoOpcodeMapper;
 
 pub fn apply_rule(
-    rule: &RewriteRule<ArithmeticExpression, PeanoOpcodeMapper>,
+    rule: &RewriteRule<ArithmeticExpression>,
     term: &HashNode<ArithmeticExpression>,
     store: &NodeStorage<ArithmeticExpression>,
 ) -> Option<HashNode<ArithmeticExpression>> {
@@ -13,7 +12,7 @@ pub fn apply_rule(
 }
 
 pub fn apply_rule_reverse(
-    rule: &RewriteRule<ArithmeticExpression, PeanoOpcodeMapper>,
+    rule: &RewriteRule<ArithmeticExpression>,
     term: &HashNode<ArithmeticExpression>,
     store: &NodeStorage<ArithmeticExpression>,
 ) -> Option<HashNode<ArithmeticExpression>> {
@@ -21,7 +20,7 @@ pub fn apply_rule_reverse(
 }
 
 pub fn rewrite_subterms(
-    rules: &[RewriteRule<ArithmeticExpression, PeanoOpcodeMapper>],
+    rules: &[RewriteRule<ArithmeticExpression>],
     term: &HashNode<ArithmeticExpression>,
     store: &NodeStorage<ArithmeticExpression>,
 ) -> Vec<HashNode<ArithmeticExpression>> {

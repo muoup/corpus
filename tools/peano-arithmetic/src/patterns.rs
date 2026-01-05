@@ -10,7 +10,7 @@ pub fn apply_substitution(
 ) -> HashNode<ArithmeticExpression> {
     match pattern {
         Pattern::Variable(idx) => {
-            subst.get(*idx).cloned().expect(&format!("Variable /{} should be bound in substitution", idx))
+            subst.get(*idx).cloned().unwrap_or_else(|| panic!("Variable /{} should be bound in substitution", idx))
         }
         Pattern::Wildcard => {
             panic!("Wildcard should not appear in pattern")

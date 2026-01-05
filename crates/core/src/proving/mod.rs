@@ -4,7 +4,6 @@
 //! by implementing the `CostEstimator` and `GoalChecker` traits.
 
 use crate::base::nodes::{HashNode, NodeStorage, HashNodeInner};
-use crate::base::opcodes::OpcodeMapper;
 use crate::rewriting::RewriteRule;
 use std::collections::{BinaryHeap, HashSet};
 use std::cmp::Ordering;
@@ -121,18 +120,17 @@ pub struct ProofResult<T: HashNodeInner> {
 /// # Type Parameters
 ///
 /// * `T` - The expression type (must implement `HashNodeInner` and `Clone`)
-/// * `M` - The opcode mapper type for rewrite rules (must implement `OpcodeMapper<T>` and `Clone`)
 /// * `C` - The cost estimator for ordering search states
 /// * `G` - The goal checker for determining proof completion
-pub struct Prover<T: HashNodeInner + Clone, M: OpcodeMapper<T> + Clone, C: CostEstimator<T>, G: GoalChecker<T>> {
-    rules: Vec<RewriteRule<T, M>>,
+pub struct Prover<T: HashNodeInner + Clone, C: CostEstimator<T>, G: GoalChecker<T>> {
+    rules: Vec<RewriteRule<T>>,
     store: NodeStorage<T>,
     max_nodes: usize,
     cost_estimator: C,
     goal_checker: G,
 }
 
-impl<T: HashNodeInner + Clone, M: OpcodeMapper<T> + Clone, C: CostEstimator<T>, G: GoalChecker<T>> Prover<T, M, C, G> {
+impl<T: HashNodeInner + Clone, C: CostEstimator<T>, G: GoalChecker<T>> Prover<T, C, G> {
     /// Create a new prover with the given cost estimator and goal checker.
     pub fn new(max_nodes: usize, cost_estimator: C, goal_checker: G) -> Self {
         Self {
@@ -145,7 +143,7 @@ impl<T: HashNodeInner + Clone, M: OpcodeMapper<T> + Clone, C: CostEstimator<T>, 
     }
 
     /// Add a rewrite rule to this prover.
-    pub fn add_rule(&mut self, rule: RewriteRule<T, M>) {
+    pub fn add_rule(&mut self, rule: RewriteRule<T>) {
         self.rules.push(rule);
     }
 
@@ -309,24 +307,6 @@ impl<T: HashNodeInner> GoalChecker<T> for HashEqualityGoalChecker {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // Simple test expression type (just u64 numbers)
-    #[derive(Clone, Copy)]
-    struct TestMapper;
-    impl crate::base::opcodes::OpcodeMapper<u64> for TestMapper {
-        fn construct(&self, _opcode: u8, _children: Vec<HashNode<u64>>, _store: &NodeStorage<u64>) -> HashNode<u64> {
-            panic!("u64 has no compound expressions")
-        }
-        fn get_opcode(&self, _expr: &HashNode<u64>) -> Option<u8> {
-            None
-        }
-        fn is_valid_opcode(&self, _opcode: u8) -> bool {
-            false
-        }
-        fn arity_for_opcode(&self, _opcode: u8) -> Option<usize> {
-            None
-        }
-    }
 
     #[test]
     fn test_cost_estimator() {

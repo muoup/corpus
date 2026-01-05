@@ -2,7 +2,7 @@ use core::fmt;
 
 use corpus_classical_logic::{BinaryTruth, ClassicalOperator};
 use corpus_core::expression::{DomainContent, DomainExpression};
-use corpus_core::nodes::{HashNode, HashNodeInner, Hashing, NodeStorage};
+use corpus_core::nodes::{HashNode, HashNodeInner, NodeStorage, Hashing};
 
 pub type PeanoExpression = DomainExpression<BinaryTruth, PeanoContent>;
 
@@ -149,6 +149,36 @@ impl HashNodeInner for ArithmeticExpression {
             }
             // Number and DeBruijn have no subterms
             ArithmeticExpression::Number(_) | ArithmeticExpression::DeBruijn(_) => None,
+        }
+    }
+
+    fn construct_from_parts(
+        opcode: u8,
+        children: Vec<HashNode<Self>>,
+        store: &NodeStorage<Self>,
+    ) -> Option<HashNode<Self>> {
+        match opcode {
+            o if o == Hashing::opcode("add") && children.len() == 2 => {
+                Some(HashNode::from_store(
+                    ArithmeticExpression::Add(children[0].clone(), children[1].clone()),
+                    store,
+                ))
+            }
+            o if o == Hashing::opcode("successor") && children.len() == 1 => {
+                Some(HashNode::from_store(
+                    ArithmeticExpression::Successor(children[0].clone()),
+                    store,
+                ))
+            }
+            o if o == Hashing::opcode("number") && children.len() == 1 => {
+                let n = children[0].hash();
+                Some(HashNode::from_store(ArithmeticExpression::Number(n), store))
+            }
+            o if o == Hashing::opcode("debruijn") && children.len() == 1 => {
+                let idx = children[0].hash() as u32;
+                Some(HashNode::from_store(ArithmeticExpression::DeBruijn(idx), store))
+            }
+            _ => None,
         }
     }
 }

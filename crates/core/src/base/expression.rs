@@ -32,7 +32,7 @@ where
         LogicalExpression::Compound {
             operator,
             operands,
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 
@@ -71,24 +71,20 @@ where
             LogicalExpression::Atomic(value) => write!(f, "{}", value),
             LogicalExpression::Compound {
                 operator, operands, ..
-            } => {
-                if operator.is_unary() {
-                    write!(f, "({} {})", operator, &operands[0])
-                } else if operator.is_binary() {
-                    write!(f, "({} {} {})", operands[0], operator, operands[1])
-                } else {
-                    write!(
-                        f,
-                        "({} {})",
-                        operator,
-                        operands
-                            .iter()
-                            .map(|op| format!("{}", op))
-                            .collect::<Vec<_>>()
-                            .join(" ")
-                    )
-                }
-            }
+            } => match operator.arity() {
+                1 => write!(f, "({} {})", operator, &operands[0]),
+                2 => write!(f, "({} {} {})", &operands[0], operator, &operands[1]),
+                _ => write!(
+                    f,
+                    "({} {})",
+                    operator,
+                    operands
+                        .iter()
+                        .map(|op| format!("{}", op))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                ),
+            },
         }
     }
 }

@@ -61,7 +61,7 @@ impl<T: HashNodeInner + Clone> Unifiable for T {
                 }
 
                 let (term_opcode, term_children) = term.value.as_ref().decompose()
-                    .ok_or_else(|| UnificationError::TypeMismatch)?;
+                    .ok_or(UnificationError::TypeMismatch)?;
 
                 if *pat_opcode != term_opcode || pat_args.len() != term_children.len() {
                     return Err(UnificationError::CannotUnify("Structure mismatch".into()));
@@ -79,13 +79,11 @@ impl<T: HashNodeInner + Clone> Unifiable for T {
     }
 
     fn occurs_check(var_index: u32, term: &HashNode<Self>, subst: &Substitution<Self>) -> bool {
-        if subst.contains(var_index) {
-            if let Some(bound) = subst.get(var_index) {
-                if bound.hash() == term.hash() {
+        if subst.contains(var_index)
+            && let Some(bound) = subst.get(var_index)
+                && bound.hash() == term.hash() {
                     return true;
                 }
-            }
-        }
         false
     }
 }

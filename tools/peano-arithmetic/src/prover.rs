@@ -5,18 +5,15 @@
 
 use corpus_core::proving::{Prover, SizeHashCostEstimator, HashEqualityGoalChecker};
 use crate::syntax::ArithmeticExpression;
-use crate::opcodes::PeanoOpcodeMapper;
 
 /// Type alias for the PA prover with default implementations.
 ///
 /// This combines:
 /// - `ArithmeticExpression` as the term type
-/// - `PeanoOpcodeMapper` for expression construction
 /// - `SizeHashCostEstimator` for cost estimation (size + hash distance)
 /// - `HashEqualityGoalChecker` for goal detection (same hash = equal)
 pub type PeanoProver = Prover<
     ArithmeticExpression,
-    PeanoOpcodeMapper,
     SizeHashCostEstimator,
     HashEqualityGoalChecker,
 >;

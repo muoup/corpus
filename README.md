@@ -45,7 +45,6 @@ cargo test --workspace
 
 - **`corpus-core`**: Hash-consed node system and core data structures
 - **`corpus-classical-logic`**: Classical logical operators (AND, OR, NOT, etc.)
-- **`corpus-rewriting`**: Bidirectional rewrite rules engine
 
 ### Tools
 
@@ -59,6 +58,8 @@ The Peano Arithmetic prover can prove statements like:
 - `S(0) + S(0) = S(S(0))` → Uses axiom 4 (additive successor)
 
 For detailed documentation on each crate's purpose and API, see [CRATES.md](docs/CRATES.md).
+
+For the type system hierarchy in category theory formulation, see [TYPE_SYSTEM.md](docs/TYPE_SYSTEM.md).
 
 For the unified grammar specification, see [unified-grammar.md](docs/unified-grammar.md).
 

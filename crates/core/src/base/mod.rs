@@ -4,7 +4,6 @@
 pub mod expression;
 pub mod logic;
 pub mod nodes;
-pub mod opcodes;
 pub mod patterns;
 pub mod truth;
 pub mod variables;
@@ -13,7 +12,6 @@ pub mod variables;
 pub use expression::*;
 pub use logic::*;
 pub use nodes::*;
-pub use opcodes::*;
 pub use patterns::*;
 pub use truth::*;
 pub use variables::*;
