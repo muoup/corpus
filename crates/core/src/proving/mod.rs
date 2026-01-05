@@ -31,49 +31,6 @@ pub trait GoalChecker<Node: HashNodeInner, T: TruthValue> {
     fn check(&self, expr: &HashNode<Node>) -> Option<T>;
 }
 
-/// Trait for recursive subterm rewriting.
-///
-/// Domains implement this for `HashNode<T>` to allow the prover to apply rewrite rules
-/// to nested expressions, not just top-level ones. This is essential
-/// for proving theorems that require rewriting subterms (e.g.,
-/// `(S(0) + S(0)) = S(S(0))` requires rewriting `(S(0) + 0)` inside `S(...)`).
-pub trait SubtermRewritable: Clone {
-    /// The expression type that can be rewritten.
-    type Expr: HashNodeInner;
-
-    /// Try to rewrite any subterm (including self) using the given function.
-    ///
-    /// Returns `Some(new_expression)` if any subterm was successfully rewritten,
-    /// or `None` if no rewrite applied.
-    ///
-    /// The implementation should:
-    /// 1. Try rewriting `self` first using `try_rewrite`
-    /// 2. If that fails, recursively try subterms
-    /// 3. Rebuild the expression with the rewritten subterm
-    fn rewrite_any_subterm<F>(
-        &self,
-        store: &NodeStorage<Self::Expr>,
-        try_rewrite: &F,
-    ) -> Option<HashNode<Self::Expr>>
-    where
-        F: Fn(&HashNode<Self::Expr>) -> Option<HashNode<Self::Expr>>;
-}
-
-/// Blanket implementation of `SubtermRewritable` for all `HashNode<T>`.
-///
-/// This delegates to the `HashNodeInner::rewrite_any_subterm` method,
-/// which domains can override for their specific expression types.
-impl<T: HashNodeInner> SubtermRewritable for HashNode<T> {
-    type Expr = T;
-
-    fn rewrite_any_subterm<F>(&self, store: &NodeStorage<T>, try_rewrite: &F) -> Option<HashNode<T>>
-    where
-        F: Fn(&HashNode<T>) -> Option<HashNode<T>>,
-    {
-        self.value.rewrite_any_subterm(self, store, try_rewrite)
-    }
-}
-
 impl<T: HashNodeInner> HashNode<T> {
     pub fn get_all_rewrites<F>(&self, store: &NodeStorage<T>, try_rewrite: &F) -> Vec<HashNode<T>>
     where
@@ -183,13 +140,7 @@ impl<Node: HashNodeInner + Clone, C: CostEstimator<Node>, T: TruthValue, G: Goal
     ///
     /// Uses A* search to explore possible rewrites. Returns `Some(ProofResult)`
     /// if a proof is found within `max_nodes` states, otherwise `None`.
-    pub fn prove(
-        &self,
-        initial_expr: &HashNode<Node>,
-    ) -> Option<ProofResult<Node, T>>
-    where
-        HashNode<Node>: SubtermRewritable<Expr = Node>,
-    {
+    pub fn prove(&self, initial_expr: &HashNode<Node>) -> Option<ProofResult<Node, T>> {
         let mut heap = BinaryHeap::new();
         let mut visited = HashSet::new();
         let mut nodes_explored = 0usize;

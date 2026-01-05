@@ -8,7 +8,7 @@ pub use base::*;
 // Re-export proving for convenience
 pub use proving::{
     CostEstimator, GoalChecker, ProofResult, ProofState, ProofStep, Prover,
-    ReflexiveGoalChecker, SizeCostEstimator, SubtermRewritable,
+    ReflexiveGoalChecker, SizeCostEstimator,
 };
 
 // Re-export rewriting for convenience

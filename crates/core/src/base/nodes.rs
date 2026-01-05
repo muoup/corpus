@@ -15,24 +15,7 @@ pub trait HashNodeInner: Sized {
     fn decompose(&self) -> Option<(u64, Vec<HashNode<Self>>)> {
         None
     }
-
-    /// Try to rewrite any subterm (including this node) using the given rewrite function.
-    ///
-    /// This is a default implementation that only tries to rewrite the top-level node.
-    /// Domains can override this to recursively try subterms (e.g., for PA expressions).
-    fn rewrite_any_subterm<F>(
-        &self,
-        node: &HashNode<Self>,
-        _store: &NodeStorage<Self>,
-        try_rewrite: &F,
-    ) -> Option<HashNode<Self>>
-    where
-        F: Fn(&HashNode<Self>) -> Option<HashNode<Self>>,
-    {
-        // Default: just try rewriting the top-level node
-        try_rewrite(node)
-    }
-
+ 
     /// Construct an expression from an opcode and children.
     ///
     /// Returns `None` if the opcode is not valid for this type or if this type
