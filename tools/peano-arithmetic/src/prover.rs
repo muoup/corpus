@@ -3,8 +3,12 @@
 //! This module provides a thin wrapper around the core `Prover` type,
 //! specializing it for Peano Arithmetic with default implementations.
 
-use corpus_core::proving::{Prover, SizeHashCostEstimator, HashEqualityGoalChecker};
-use crate::syntax::ArithmeticExpression;
+use crate::syntax::{ArithmeticExpression, PeanoContent};
+use corpus_classical_logic::BinaryTruth;
+use corpus_core::{
+    RewriteRule,
+    proving::{AxiomMatchChecker, Prover, SizeCostEstimator},
+};
 
 /// Type alias for the PA prover with default implementations.
 ///
@@ -12,11 +16,7 @@ use crate::syntax::ArithmeticExpression;
 /// - `ArithmeticExpression` as the term type
 /// - `SizeHashCostEstimator` for cost estimation (size + hash distance)
 /// - `HashEqualityGoalChecker` for goal detection (same hash = equal)
-pub type PeanoProver = Prover<
-    ArithmeticExpression,
-    SizeHashCostEstimator,
-    HashEqualityGoalChecker,
->;
+pub type PeanoProver<'a> = Prover<PeanoContent, SizeCostEstimator, BinaryTruth, AxiomMatchChecker<'a, PeanoContent>>;
 
 /// Create a new PA prover with the given node limit.
 ///
@@ -32,16 +32,12 @@ pub type PeanoProver = Prover<
 ///     prover.add_rule(rule);
 /// }
 /// ```
-pub fn create_prover(max_nodes: usize) -> PeanoProver {
-    Prover::new(
-        max_nodes,
-        SizeHashCostEstimator,
-        HashEqualityGoalChecker,
-    )
+pub fn create_prover(max_nodes: usize, axioms: &[RewriteRule<PeanoContent>]) -> PeanoProver {
+    Prover::new(max_nodes, SizeCostEstimator, AxiomMatchChecker::new(axioms))
 }
 
 // Re-export commonly used types from core for convenience
-pub use corpus_core::proving::{ProofStep, ProofState, ProofResult};
+pub use corpus_core::proving::{ProofResult, ProofState, ProofStep};
 
 /// Extension trait for printing PA-specific proofs.
 pub trait ProofResultExt {
@@ -49,33 +45,21 @@ pub trait ProofResultExt {
     fn print(&self);
 }
 
-impl ProofResultExt for ProofResult<ArithmeticExpression> {
+impl ProofResultExt for ProofResult<ArithmeticExpression, BinaryTruth> {
     fn print(&self) {
         println!("✓ Theorem proved!");
         println!("Nodes explored: {}", self.nodes_explored);
         println!();
 
-        if !self.lhs_steps.is_empty() {
-            println!("LHS transformations:");
-            for (i, step) in self.lhs_steps.iter().enumerate() {
+        if !self.steps.is_empty() {
+            println!("Proof steps:");
+            for (i, step) in self.steps.iter().enumerate() {
                 println!("  {}. Apply \"{}\":", i + 1, step.rule_name);
                 println!("     {} → {}", step.old_expr, step.new_expr);
             }
             println!();
         }
 
-        if !self.rhs_steps.is_empty() {
-            println!("RHS transformations:");
-            for (i, step) in self.rhs_steps.iter().enumerate() {
-                println!("  {}. Apply \"{}\":", i + 1, step.rule_name);
-                println!("     {} → {}", step.old_expr, step.new_expr);
-            }
-            println!();
-        }
-
-        println!("Final: {} = {} ✓",
-            self.lhs_steps.last().map_or(&self.final_expr, |s| &s.new_expr),
-            self.rhs_steps.last().map_or(&self.final_expr, |s| &s.new_expr)
-        );
+        println!("Final: {} ✓", self.final_expr);
     }
 }

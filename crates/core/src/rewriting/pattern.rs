@@ -11,7 +11,7 @@ pub enum Pattern<T: HashNodeInner + Clone> {
     Wildcard,
     Constant(T),
     Compound {
-        opcode: u8,
+        opcode: u64,
         args: Vec<Pattern<T>>,
     },
 }
@@ -29,7 +29,7 @@ impl<T: HashNodeInner + Clone> Pattern<T> {
         Pattern::Constant(value)
     }
 
-    pub fn compound(opcode: u8, args: Vec<Pattern<T>>) -> Self {
+    pub fn compound(opcode: u64, args: Vec<Pattern<T>>) -> Self {
         Pattern::Compound { opcode, args }
     }
 

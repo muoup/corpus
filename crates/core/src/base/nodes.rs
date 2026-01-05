@@ -12,7 +12,7 @@ pub trait HashNodeInner: Sized {
     fn hash(&self) -> u64;
     fn size(&self) -> u64;
 
-    fn decompose(&self) -> Option<(u8, Vec<HashNode<Self>>)> {
+    fn decompose(&self) -> Option<(u64, Vec<HashNode<Self>>)> {
         None
     }
 
@@ -38,7 +38,7 @@ pub trait HashNodeInner: Sized {
     /// Returns `None` if the opcode is not valid for this type or if this type
     /// does not support compound expressions.
     fn construct_from_parts(
-        _opcode: u8,
+        _opcode: u64,
         _children: Vec<HashNode<Self>>,
         _store: &NodeStorage<Self>,
     ) -> Option<HashNode<Self>> {
@@ -111,7 +111,7 @@ impl<T: HashNodeInner> HashNode<T> {
 }
 
 impl Hashing {
-    pub fn hash_combine(hash1: u64, hash2: u64) -> u64 {
+    pub const fn hash_combine(hash1: u64, hash2: u64) -> u64 {
         const MAGIC: u64 = 0x9e3779b9;
 
         hash1
@@ -121,7 +121,7 @@ impl Hashing {
                 .wrapping_add(hash2 >> 2))
     }
 
-    pub fn root_hash(root_opcode: u8, children: &[u64]) -> u64 {
+    pub fn root_hash(root_opcode: u64, children: &[u64]) -> u64 {
         let mut result = root_opcode as u64;
         for &h in children {
             result = Self::hash_combine(result, h);
@@ -129,13 +129,14 @@ impl Hashing {
         result
     }
 
-    pub fn opcode(name: &str) -> u8 {
-        use std::hash::{Hash, Hasher};
-        use std::collections::hash_map::DefaultHasher;
-
-        let mut hasher = DefaultHasher::new();
-        name.hash(&mut hasher);
-        (hasher.finish() % 255) as u8
+    pub fn opcode(name: &str) -> u64 {
+        let mut hash : u64 = 0;
+        
+        for byte in name.as_bytes() {
+            hash = Self::hash_combine(hash, *byte as u64);
+        }
+        
+        return hash;
     }
 }
 

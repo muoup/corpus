@@ -64,7 +64,7 @@ impl HashNodeInner for PeanoContent {
         }
     }
 
-    fn decompose(&self) -> Option<(u8, Vec<HashNode<Self>>)> {
+    fn decompose(&self) -> Option<(u64, Vec<HashNode<Self>>)> {
         None
     }
 }
@@ -94,7 +94,7 @@ impl HashNodeInner for ArithmeticExpression {
         }
     }
 
-    fn decompose(&self) -> Option<(u8, Vec<HashNode<Self>>)> {
+    fn decompose(&self) -> Option<(u64, Vec<HashNode<Self>>)> {
         match self {
             ArithmeticExpression::Add(left, right) => {
                 Some((Hashing::opcode("add"), vec![left.clone(), right.clone()]))
@@ -153,11 +153,14 @@ impl HashNodeInner for ArithmeticExpression {
     }
 
     fn construct_from_parts(
-        opcode: u8,
+        opcode: u64,
         children: Vec<HashNode<Self>>,
         store: &NodeStorage<Self>,
     ) -> Option<HashNode<Self>> {
         match opcode {
+            // Unfortunately due to the limitations of Rust's constexpr engine, Hashing::opcode("...") is not compile-time
+            // and thus we cannot use a true match here. Instead we have to fudge it with if statements.
+            
             o if o == Hashing::opcode("add") && children.len() == 2 => {
                 Some(HashNode::from_store(
                     ArithmeticExpression::Add(children[0].clone(), children[1].clone()),
