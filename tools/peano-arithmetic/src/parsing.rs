@@ -339,3 +339,145 @@ impl<'a> Parser<'a> {
         )
     }
 }
+
+// ============================================================================
+// Axiom Parsing Support
+// ============================================================================
+
+/// Storage instances for axiom parsing.
+///
+/// This struct holds the various NodeStorage instances needed during
+/// axiom parsing, allowing external management of storage lifetime.
+pub struct AxiomStores {
+    pub peano_store: NodeStorage<PeanoExpression>,
+    pub expression_store: NodeStorage<ArithmeticExpression>,
+    pub content_store: NodeStorage<PeanoContent>,
+    pub logical_store: NodeStorage<LogicalExpression<BinaryTruth, PeanoContent, ClassicalOperator>>,
+}
+
+impl AxiomStores {
+    pub fn new() -> Self {
+        Self {
+            peano_store: NodeStorage::new(),
+            expression_store: NodeStorage::new(),
+            content_store: NodeStorage::new(),
+            logical_store: NodeStorage::new(),
+        }
+    }
+}
+
+/// Parse an axiom from a string with explicit quantifiers.
+///
+/// # Syntax
+/// - Quantifiers: `forall /0, forall /1.` or `∀/0, ∀/1.`
+/// - De Bruijn indices: `/0`, `/1`, `/2`
+/// - Arithmetic: `S(...)`, `+`, numbers
+/// - Logical: `=`, `->` (impllication), `<->` (iff)
+///
+/// # Examples
+/// ```ignore
+/// // Successor injectivity
+/// let axiom = parse_axiom(
+///     "FORALL (FORALL (EQ (S (/0)) (S (/1)) -> EQ (/0) (/1)))",
+///     "axiom2_successor_injectivity",
+///     &stores
+/// )?;
+///
+/// // Additive identity
+/// let axiom = parse_axiom(
+///     "FORALL (EQ (PLUS (/0) (0)) (/0))",
+///     "axiom3_additive_identity",
+///     &stores
+/// )?;
+/// ```
+///
+/// Note: The current implementation uses S-expression style parsing.
+/// The syntax is: `<operator> (<operand>) (<operand>)`.
+pub fn parse_axiom(
+    input: &str,
+    name: &str,
+    _stores: &AxiomStores,
+) -> Result<
+    corpus_core::base::axioms::NamedAxiom<
+        BinaryTruth,
+        PeanoContent,
+        ClassicalOperator,
+    >,
+    corpus_core::base::axioms::AxiomError,
+> {
+    use corpus_core::base::axioms::{AxiomError, NamedAxiom};
+    use corpus_core::expression::DomainExpression;
+
+    // Parse the input using the existing parser infrastructure
+    let mut parser = Parser::new(input);
+
+    // Try to parse as a proposition (logical expression)
+    let peano_expr = parser.parse_proposition().map_err(|e| AxiomError::ParseError {
+        message: e,
+        position: None,
+    })?;
+
+    // Extract the LogicalExpression from the PeanoExpression (DomainExpression)
+    // Domain expressions (like PeanoContent::Equals) need to be lifted to logical expressions
+    let logical_expr = match peano_expr.value.as_ref() {
+        DomainExpression::Logical(logical_node) => logical_node.clone(),
+        DomainExpression::Domain(domain_node) => {
+            // Convert domain expression to logical expression
+            // For axioms, we expect domain content to be equality statements
+            convert_domain_to_logical(domain_node, &parser.logical_store, &parser.content_store)?
+        }
+    };
+
+    // Create the NamedAxiom with the ClassicalAxiomConverter
+    Ok(NamedAxiom::new_with_converter(
+        name,
+        logical_expr,
+        Box::new(corpus_classical_logic::axioms::ClassicalAxiomConverter),
+    ))
+}
+
+/// Convert a domain expression to a logical expression for axiom processing.
+///
+/// Domain-level equality (PeanoContent::Equals) is converted to logical-level
+/// equality (LogicalExpression::Compound with ClassicalOperator::Equals).
+///
+/// Domain-level arithmetic expressions are wrapped in PeanoContent::Arithmetic
+/// and then LogicalExpression::Atomic.
+fn convert_domain_to_logical(
+    domain_node: &HashNode<PeanoContent>,
+    logical_store: &NodeStorage<LogicalExpression<BinaryTruth, PeanoContent, ClassicalOperator>>,
+    content_store: &NodeStorage<PeanoContent>,
+) -> Result<HashNode<LogicalExpression<BinaryTruth, PeanoContent, ClassicalOperator>>, corpus_core::base::axioms::AxiomError> {
+    use crate::syntax::PeanoContent;
+
+    match domain_node.value.as_ref() {
+        PeanoContent::Equals(left, right) => {
+            // Wrap arithmetic expressions in PeanoContent::Arithmetic
+            let left_content = PeanoContent::Arithmetic(left.clone());
+            let right_content = PeanoContent::Arithmetic(right.clone());
+
+            // Create atomic logical expressions
+            let left_atomic = LogicalExpression::atomic(HashNode::from_store(left_content, content_store));
+            let right_atomic = LogicalExpression::atomic(HashNode::from_store(right_content, content_store));
+
+            // Create logical equality as a Compound expression
+            let left_logical = HashNode::from_store(left_atomic, logical_store);
+            let right_logical = HashNode::from_store(right_atomic, logical_store);
+
+            let equals_expr = LogicalExpression::compound(
+                ClassicalOperator::Equals,
+                vec![left_logical, right_logical],
+            );
+
+            Ok(HashNode::from_store(equals_expr, logical_store))
+        }
+        PeanoContent::Arithmetic(_) => {
+            // Wrap arithmetic expression in Atomic logical expression
+            let atomic = LogicalExpression::atomic(HashNode::from_store(
+                domain_node.value.as_ref().clone(),
+                content_store,
+            ));
+            Ok(HashNode::from_store(atomic, logical_store))
+        }
+    }
+}

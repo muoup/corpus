@@ -49,7 +49,10 @@ impl GoalChecker<PeanoContent, BinaryTruth> for AxiomPatternChecker {
 /// When both sides of an equality have the same hash, they are structurally identical,
 /// meaning we've proven the original statement by rewriting it to a tautology.
 fn check_reflexive_equality(expr: &HashNode<PeanoContent>) -> Option<BinaryTruth> {
-    let PeanoContent::Equals(left, right) = expr.value.as_ref();
+    // This function only handles Equals, not Arithmetic
+    let PeanoContent::Equals(left, right) = expr.value.as_ref() else {
+        return None;
+    };
     // Check if left and right sides have the same hash (are structurally equal)
     if left.hash() == right.hash() {
         return Some(BinaryTruth::True);
@@ -65,7 +68,10 @@ fn check_reflexive_equality(expr: &HashNode<PeanoContent>) -> Option<BinaryTruth
 ///
 /// Returns `Some(BinaryTruth::False)` if a contradiction is detected.
 fn check_contradiction(expr: &HashNode<PeanoContent>) -> Option<BinaryTruth> {
-    let PeanoContent::Equals(left, right) = expr.value.as_ref();
+    // This function only handles Equals, not Arithmetic
+    let PeanoContent::Equals(left, right) = expr.value.as_ref() else {
+        return None;
+    };
 
     // Check if this is a direct contradiction like n = S(n)
     if is_successor_contradiction(left, right) || is_successor_contradiction(right, left) {

@@ -3,6 +3,8 @@
 //! This module provides a generic prover that can work with any logical system
 //! by implementing the `CostEstimator` and `GoalChecker` traits.
 
+pub mod context;
+
 use crate::base::nodes::{HashNode, HashNodeInner, NodeStorage};
 use crate::rewriting::RewriteRule;
 use crate::{BinaryTruth, TruthValue};

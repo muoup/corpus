@@ -10,6 +10,9 @@ pub type PeanoExpression = DomainExpression<BinaryTruth, PeanoContent>;
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum PeanoContent {
+    /// An arithmetic expression (for use in logical axioms).
+    Arithmetic(HashNode<ArithmeticExpression>),
+    /// Equality of two arithmetic expressions.
     Equals(
         HashNode<ArithmeticExpression>,
         HashNode<ArithmeticExpression>,
@@ -31,6 +34,7 @@ pub enum ArithmeticExpression {
 impl fmt::Display for PeanoContent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            PeanoContent::Arithmetic(expr) => write!(f, "{}", expr),
             PeanoContent::Equals(left, right) => write!(f, "{} = {}", left, right),
         }
     }
@@ -54,6 +58,9 @@ impl fmt::Display for ArithmeticExpression {
 impl HashNodeInner for PeanoContent {
     fn hash(&self) -> u64 {
         match self {
+            PeanoContent::Arithmetic(expr) => {
+                Hashing::root_hash(Hashing::opcode("arithmetic_wrapper"), &[expr.hash()])
+            }
             PeanoContent::Equals(left, right) => {
                 let hashes = vec![left.hash(), right.hash()];
                 Hashing::root_hash(Hashing::opcode("equals"), &hashes)
@@ -63,6 +70,7 @@ impl HashNodeInner for PeanoContent {
 
     fn size(&self) -> u64 {
         match self {
+            PeanoContent::Arithmetic(expr) => 1 + expr.size(),
             PeanoContent::Equals(left, right) => 1 + left.size() + right.size(),
         }
     }
@@ -155,7 +163,10 @@ pub fn get_all_rewrites_for_equality(
 ) -> Vec<HashNode<PeanoContent>> {
     let mut rewrites = Vec::new();
 
-    let PeanoContent::Equals(left, right) = equality.value.as_ref();
+    // This function only handles Equals, not Arithmetic
+    let PeanoContent::Equals(left, right) = equality.value.as_ref() else {
+        return rewrites;
+    };
     
     // Create an arithmetic expression store for applying rules
     let arith_store = NodeStorage::<ArithmeticExpression>::new();
@@ -215,13 +226,16 @@ pub fn apply_successor_injectivity(
     equality: &HashNode<PeanoContent>,
     store: &NodeStorage<PeanoContent>,
 ) -> Option<HashNode<PeanoContent>> {
-    let PeanoContent::Equals(left, right) = equality.value.as_ref();
-    
+    // This function only handles Equals, not Arithmetic
+    let PeanoContent::Equals(left, right) = equality.value.as_ref() else {
+        return None;
+    };
+
     // Check if both sides are Successor expressions
     let ArithmeticExpression::Successor(left_inner) = left.value.as_ref() else {
         return None;
     };
-    
+
     let ArithmeticExpression::Successor(right_inner) = right.value.as_ref() else {
         return None;
     };

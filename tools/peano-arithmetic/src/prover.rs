@@ -121,7 +121,10 @@ fn get_all_rewrites_with_names(
 ) -> Vec<(HashNode<PeanoContent>, String)> {
     let mut results = Vec::new();
 
-    let PeanoContent::Equals(left, right) = equality.value.as_ref();
+    // This function only handles Equals, not Arithmetic
+    let PeanoContent::Equals(left, right) = equality.value.as_ref() else {
+        return results;
+    };
     let arith_store = NodeStorage::<crate::syntax::ArithmeticExpression>::new();
 
     // Try each arithmetic rule on both sides
