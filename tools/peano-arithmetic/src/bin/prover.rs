@@ -1,8 +1,8 @@
-use corpus_core::base::nodes::HashNode;
-use peano_arithmetic::axioms::peano_arithmetic_rules;
+use corpus_core::base::nodes::{HashNode, NodeStorage};
 use peano_arithmetic::parsing::Parser;
-use peano_arithmetic::prover::{create_prover, ProofResultExt};
-use peano_arithmetic::syntax::{ArithmeticExpression, PeanoContent, PeanoExpression};
+use peano_arithmetic::prover::{prove_pa, ProofResultExt};
+use peano_arithmetic::syntax::{PeanoContent, PeanoExpression};
+use peano_arithmetic::axioms::peano_arithmetic_rules;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -28,29 +28,30 @@ fn main() {
             println!("Parsed: {}", proposition);
             println!();
 
-            let (lhs, rhs) = match extract_equality_operands(proposition) {
-                Ok(pair) => pair,
+            // Extract the PeanoContent (equality expression) from the DomainExpression
+            let peano_content = match extract_equality_content(proposition) {
+                Ok(content) => content,
                 Err(e) => {
                     eprintln!("Error: {}", e);
                     std::process::exit(1);
                 }
             };
 
-            println!("LHS: {}", lhs);
-            println!("RHS: {}", rhs);
+            println!("Theorem: {}", peano_content);
             println!();
 
-            let mut prover = create_prover(10000);
-
             println!("Loading Peano axioms...");
-            for rule in peano_arithmetic_rules() {
+            let arithmetic_rules = peano_arithmetic_rules();
+            for rule in &arithmetic_rules {
                 println!("  - {}", rule.name);
-                prover.add_rule(rule);
             }
             println!();
 
+            // Create a NodeStorage for PeanoContent
+            let store = NodeStorage::new();
+
             println!("Searching for proof (max 10000 nodes)...");
-            match prover.prove(&lhs, &rhs) {
+            match prove_pa(&peano_content, &store, 10000) {
                 Some(result) => {
                     println!();
                     result.print();
@@ -68,17 +69,11 @@ fn main() {
     }
 }
 
-fn extract_equality_operands(
+fn extract_equality_content(
     proposition: HashNode<PeanoExpression>,
-) -> Result<
-    (
-        HashNode<ArithmeticExpression>,
-        HashNode<ArithmeticExpression>,
-    ),
-    String,
-> {
-    match proposition.value.as_domain().map(|peano_expr| peano_expr.value.as_ref()) {
-        Some(PeanoContent::Equals(left, right)) => Ok((left.clone(), right.clone())),
+) -> Result<HashNode<PeanoContent>, String> {
+    match proposition.value.as_domain() {
+        Some(content) => Ok(content.clone()),
         None => Err("Theorem must be an equality (EQ ...).".to_string()),
     }
 }

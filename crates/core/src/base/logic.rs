@@ -6,7 +6,6 @@ pub trait LogicalOperator<T: TruthValue>: Clone + Debug + Send + Sync {
 
     fn symbol(&self) -> Self::Symbol;
     fn arity(&self) -> usize;
-    fn apply(&self, operands: &[T]) -> T;
 }
 
 pub struct LogicalOperatorSet<T: TruthValue, Op: LogicalOperator<T>> {

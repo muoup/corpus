@@ -9,6 +9,7 @@ pub use pattern::{Pattern, QuantifierType};
 pub use substitution::Substitution;
 pub use unifiable::{Unifiable, UnificationError};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RewriteDirection {
     Both,
     Forward,

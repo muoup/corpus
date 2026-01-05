@@ -6,8 +6,12 @@ pub mod rewriting;
 pub use base::*;
 
 // Re-export proving for convenience
-pub use proving::{Prover, CostEstimator, GoalChecker, SubtermRewritable, ProofState, ProofStep, ProofResult,
-                 SizeHashCostEstimator, HashEqualityGoalChecker};
+pub use proving::{
+    CostEstimator, GoalChecker, ProofResult, ProofState, ProofStep, Prover,
+    ReflexiveGoalChecker, SizeCostEstimator,
+};
 
 // Re-export rewriting for convenience
-pub use rewriting::{Pattern, Substitution, Unifiable, UnificationError, RewriteDirection, RewriteRule};
+pub use rewriting::{
+    Pattern, RewriteDirection, RewriteRule, Substitution, Unifiable, UnificationError,
+};

@@ -3,21 +3,24 @@
 //! This module provides a generic prover that can work with any logical system
 //! by implementing the `CostEstimator` and `GoalChecker` traits.
 
-use crate::base::nodes::{HashNode, NodeStorage, HashNodeInner};
+pub mod context;
+
+use crate::base::nodes::{HashNode, HashNodeInner, NodeStorage};
 use crate::rewriting::RewriteRule;
-use std::collections::{BinaryHeap, HashSet};
+use crate::{BinaryTruth, TruthValue};
 use std::cmp::Ordering;
+use std::collections::{BinaryHeap, HashSet};
 
 /// Trait for domain-specific cost estimation in proof search.
 ///
-/// Implementations define how to estimate the "cost" or distance between
-/// two expressions. Lower costs indicate states that should be explored first.
+/// Implementations define how to estimate the "cost" or "distance to goal" for
+/// an expression. Lower costs indicate states that should be explored first.
 pub trait CostEstimator<T: HashNodeInner> {
-    /// Estimate the cost between LHS and RHS expressions.
+    /// Estimate the cost of an expression (distance to goal).
     ///
-    /// Lower values indicate the expressions are "closer" and should be
+    /// Lower values indicate the expression is "closer" to a goal and should be
     /// prioritized in the A* search.
-    fn estimate_cost(&self, lhs: &HashNode<T>, rhs: &HashNode<T>) -> u64;
+    fn estimate_cost(&self, expr: &HashNode<T>) -> u64;
 }
 
 /// Trait for domain-specific goal checking.
@@ -25,55 +28,36 @@ pub trait CostEstimator<T: HashNodeInner> {
 /// Implementations define when a proof state is considered a "goal" or
 /// success condition. For equational proofs, this is typically when both
 /// sides have the same hash.
-pub trait GoalChecker<T: HashNodeInner> {
+pub trait GoalChecker<Node: HashNodeInner, T: TruthValue> {
     /// Check if the current state represents a goal (proof complete).
-    fn is_goal(&self, lhs: &HashNode<T>, rhs: &HashNode<T>) -> bool;
+    fn check(&self, expr: &HashNode<Node>) -> Option<T>;
 }
 
-/// Trait for recursive subterm rewriting.
-///
-/// Domains implement this for `HashNode<T>` to allow the prover to apply rewrite rules
-/// to nested expressions, not just top-level ones. This is essential
-/// for proving theorems that require rewriting subterms (e.g.,
-/// `(S(0) + S(0)) = S(S(0))` requires rewriting `(S(0) + 0)` inside `S(...)`).
-pub trait SubtermRewritable: Clone {
-    /// The expression type that can be rewritten.
-    type Expr: HashNodeInner;
-
-    /// Try to rewrite any subterm (including self) using the given function.
-    ///
-    /// Returns `Some(new_expression)` if any subterm was successfully rewritten,
-    /// or `None` if no rewrite applied.
-    ///
-    /// The implementation should:
-    /// 1. Try rewriting `self` first using `try_rewrite`
-    /// 2. If that fails, recursively try subterms
-    /// 3. Rebuild the expression with the rewritten subterm
-    fn rewrite_any_subterm<F>(
-        &self,
-        store: &NodeStorage<Self::Expr>,
-        try_rewrite: &F,
-    ) -> Option<HashNode<Self::Expr>>
-    where
-        F: Fn(&HashNode<Self::Expr>) -> Option<HashNode<Self::Expr>>;
-}
-
-/// Blanket implementation of `SubtermRewritable` for all `HashNode<T>`.
-///
-/// This delegates to the `HashNodeInner::rewrite_any_subterm` method,
-/// which domains can override for their specific expression types.
-impl<T: HashNodeInner> SubtermRewritable for HashNode<T> {
-    type Expr = T;
-
-    fn rewrite_any_subterm<F>(
-        &self,
-        store: &NodeStorage<T>,
-        try_rewrite: &F,
-    ) -> Option<HashNode<T>>
+impl<T: HashNodeInner> HashNode<T> {
+    pub fn get_all_rewrites<F>(&self, store: &NodeStorage<T>, try_rewrite: &F) -> Vec<HashNode<T>>
     where
         F: Fn(&HashNode<T>) -> Option<HashNode<T>>,
     {
-        self.value.rewrite_any_subterm(self, store, try_rewrite)
+        let mut rewrites = Vec::new();
+
+        if let Some(rewritten) = try_rewrite(self) {
+            rewrites.push(rewritten);
+        }
+
+        let Some((opcode, parts)) = self.value.decompose() else {
+            return rewrites;
+        };
+
+        for (i, part) in parts.iter().enumerate() {
+            for rewrite in part.get_all_rewrites(store, try_rewrite).into_iter() {
+                let mut new_parts = parts.clone();
+                new_parts[i] = rewrite;
+
+                rewrites.push(T::construct_from_parts(opcode, new_parts, store).unwrap());
+            }
+        }
+
+        rewrites
     }
 }
 
@@ -91,28 +75,24 @@ pub struct ProofStep<T: HashNodeInner> {
 /// A state in the proof search with LHS/RHS expressions and associated metadata.
 #[derive(Clone)]
 pub struct ProofState<T: HashNodeInner> {
-    /// Left-hand side expression.
-    pub lhs: HashNode<T>,
-    /// Right-hand side expression.
-    pub rhs: HashNode<T>,
-    /// Transformations applied to reach LHS.
-    pub lhs_steps: Vec<ProofStep<T>>,
-    /// Transformations applied to reach RHS.
-    pub rhs_steps: Vec<ProofStep<T>>,
+    /// Expression
+    pub expr: HashNode<T>,
+    /// Transformations applied to reach this state.
+    pub steps: Vec<ProofStep<T>>,
     /// Estimated cost to goal (for A* priority queue ordering).
     pub estimated_cost: u64,
 }
 
 /// Result of a successful proof.
-pub struct ProofResult<T: HashNodeInner> {
-    /// Transformations applied to LHS.
-    pub lhs_steps: Vec<ProofStep<T>>,
-    /// Transformations applied to RHS.
-    pub rhs_steps: Vec<ProofStep<T>>,
+pub struct ProofResult<Node: HashNodeInner, T: TruthValue> {
+    /// Transformations applied
+    pub steps: Vec<ProofStep<Node>>,
     /// Number of states explored during proof search.
     pub nodes_explored: usize,
     /// The final expression where both sides met.
-    pub final_expr: HashNode<T>,
+    pub final_expr: HashNode<Node>,
+    /// Result
+    pub truth_result: T,
 }
 
 /// Generic prover using trait hooks for domain-specific behavior.
@@ -122,15 +102,24 @@ pub struct ProofResult<T: HashNodeInner> {
 /// * `T` - The expression type (must implement `HashNodeInner` and `Clone`)
 /// * `C` - The cost estimator for ordering search states
 /// * `G` - The goal checker for determining proof completion
-pub struct Prover<T: HashNodeInner + Clone, C: CostEstimator<T>, G: GoalChecker<T>> {
-    rules: Vec<RewriteRule<T>>,
-    store: NodeStorage<T>,
+pub struct Prover<
+    Node: HashNodeInner + Clone,
+    C: CostEstimator<Node>,
+    T: TruthValue,
+    G: GoalChecker<Node, T>,
+> {
+    rules: Vec<RewriteRule<Node>>,
+    store: NodeStorage<Node>,
     max_nodes: usize,
     cost_estimator: C,
     goal_checker: G,
+
+    _phantom: std::marker::PhantomData<T>,
 }
 
-impl<T: HashNodeInner + Clone, C: CostEstimator<T>, G: GoalChecker<T>> Prover<T, C, G> {
+impl<Node: HashNodeInner + Clone, C: CostEstimator<Node>, T: TruthValue, G: GoalChecker<Node, T>>
+    Prover<Node, C, T, G>
+{
     /// Create a new prover with the given cost estimator and goal checker.
     pub fn new(max_nodes: usize, cost_estimator: C, goal_checker: G) -> Self {
         Self {
@@ -139,32 +128,29 @@ impl<T: HashNodeInner + Clone, C: CostEstimator<T>, G: GoalChecker<T>> Prover<T,
             max_nodes,
             cost_estimator,
             goal_checker,
+
+            _phantom: std::marker::PhantomData,
         }
     }
 
     /// Add a rewrite rule to this prover.
-    pub fn add_rule(&mut self, rule: RewriteRule<T>) {
+    pub fn add_rule(&mut self, rule: RewriteRule<Node>) {
         self.rules.push(rule);
     }
 
-    /// Attempt to prove that lhs and rhs are equivalent.
+    /// Attempt to prove a statement by rewriting it until a goal is reached.
     ///
-    /// Uses A* search with bidirectional rewriting. Returns `Some(ProofResult)`
+    /// Uses A* search to explore possible rewrites. Returns `Some(ProofResult)`
     /// if a proof is found within `max_nodes` states, otherwise `None`.
-    pub fn prove(&self, initial_lhs: &HashNode<T>, initial_rhs: &HashNode<T>) -> Option<ProofResult<T>>
-    where
-        HashNode<T>: SubtermRewritable<Expr = T>,
-    {
+    pub fn prove(&self, initial_expr: &HashNode<Node>) -> Option<ProofResult<Node, T>> {
         let mut heap = BinaryHeap::new();
-        let mut visited: HashSet<(u64, u64)> = HashSet::new();
+        let mut visited = HashSet::new();
         let mut nodes_explored = 0usize;
 
-        let initial_cost = self.cost_estimator.estimate_cost(initial_lhs, initial_rhs);
+        let initial_cost = self.cost_estimator.estimate_cost(initial_expr);
         let initial_state = ProofState {
-            lhs: initial_lhs.clone(),
-            rhs: initial_rhs.clone(),
-            lhs_steps: Vec::new(),
-            rhs_steps: Vec::new(),
+            expr: initial_expr.clone(),
+            steps: Vec::new(),
             estimated_cost: initial_cost,
         };
 
@@ -177,77 +163,44 @@ impl<T: HashNodeInner + Clone, C: CostEstimator<T>, G: GoalChecker<T>> Prover<T,
                 return None;
             }
 
-            if self.goal_checker.is_goal(&state.lhs, &state.rhs) {
+            if let Some(truth) = self.goal_checker.check(&state.expr) {
                 return Some(ProofResult {
-                    lhs_steps: state.lhs_steps,
-                    rhs_steps: state.rhs_steps,
+                    steps: state.steps,
                     nodes_explored,
-                    final_expr: state.lhs,
+                    final_expr: state.expr,
+                    truth_result: truth,
                 });
             }
 
-            let key = (state.lhs.hash(), state.rhs.hash());
+            let key = state.expr.hash();
             if visited.contains(&key) {
                 continue;
             }
             visited.insert(key);
 
-            for successor in self.expand_state(&state) {
-                heap.push(successor);
+            for rule in self.rules.iter() {
+                for successor in state
+                    .expr
+                    .get_all_rewrites(&self.store, &|node| rule.apply(node, &self.store))
+                {
+                    heap.push(ProofState {
+                        expr: successor.clone(),
+                        steps: {
+                            let mut new_steps = state.steps.clone();
+                            new_steps.push(ProofStep {
+                                rule_name: rule.name.clone(),
+                                old_expr: state.expr.clone(),
+                                new_expr: successor.clone(),
+                            });
+                            new_steps
+                        },
+                        estimated_cost: self.cost_estimator.estimate_cost(&successor),
+                    });
+                }
             }
         }
 
         None
-    }
-
-    /// Expand a state by applying all rewrite rules to LHS and RHS (including subterms).
-    fn expand_state(&self, state: &ProofState<T>) -> Vec<ProofState<T>>
-    where
-        HashNode<T>: SubtermRewritable<Expr = T>,
-    {
-        let mut successors = Vec::new();
-
-        for rule in &self.rules {
-            if rule.is_bidirectional() {
-                // Try rewriting any subterm (including top-level) on LHS using forward direction
-                if let Some(new_lhs) = state.lhs.rewrite_any_subterm(&self.store, &|term| rule.apply(term, &self.store)) {
-                    let new_cost = self.cost_estimator.estimate_cost(&new_lhs, &state.rhs);
-                    let mut lhs_steps = state.lhs_steps.clone();
-                    lhs_steps.push(ProofStep {
-                        rule_name: rule.name.clone(),
-                        old_expr: state.lhs.clone(),
-                        new_expr: new_lhs.clone(),
-                    });
-                    successors.push(ProofState {
-                        lhs: new_lhs,
-                        rhs: state.rhs.clone(),
-                        lhs_steps,
-                        rhs_steps: state.rhs_steps.clone(),
-                        estimated_cost: new_cost,
-                    });
-                }
-
-                // Try rewriting any subterm on RHS using reverse direction
-                if let Some(new_rhs) = state.rhs.rewrite_any_subterm(&self.store, &|term| rule.apply_reverse(term, &self.store)) {
-                    let new_cost = self.cost_estimator.estimate_cost(&state.lhs, &new_rhs);
-                    let mut rhs_steps = state.rhs_steps.clone();
-                    rhs_steps.push(ProofStep {
-                        rule_name: rule.name.clone(),
-                        old_expr: state.rhs.clone(),
-                        new_expr: new_rhs.clone(),
-                    });
-                    successors.push(ProofState {
-                        lhs: state.lhs.clone(),
-                        rhs: new_rhs,
-                        lhs_steps: state.lhs_steps.clone(),
-                        rhs_steps,
-                        estimated_cost: new_cost,
-                    });
-                }
-            }
-        }
-
-        successors
     }
 }
 
@@ -276,31 +229,42 @@ impl<T: HashNodeInner> Ord for ProofState<T> {
 // Default Implementations
 // ============================================================================
 
-/// Default cost estimator: combines expression sizes and hash distance.
+/// Default cost estimator: based on expression size.
 ///
-/// Cost = size(LHS) + size(RHS) + |hash(LHS) - hash(RHS)|
-///
-/// This encourages exploring smaller expressions with closer hash values.
-pub struct SizeHashCostEstimator;
+/// Lower cost = smaller expression. This encourages exploring smaller
+/// expressions first as they likely indicate simpler forms.
+pub struct SizeCostEstimator;
 
-impl<T: HashNodeInner> CostEstimator<T> for SizeHashCostEstimator {
-    fn estimate_cost(&self, lhs: &HashNode<T>, rhs: &HashNode<T>) -> u64 {
-        let lhs_size = lhs.size();
-        let rhs_size = rhs.size();
-        let hash_distance = lhs.hash().abs_diff(rhs.hash());
-        lhs_size + rhs_size + hash_distance
+impl<T: HashNodeInner> CostEstimator<T> for SizeCostEstimator {
+    fn estimate_cost(&self, expr: &HashNode<T>) -> u64 {
+        expr.size()
     }
 }
 
-/// Default goal checker: hash equality.
+/// Default goal checker: reflexive axiom check for equalities
 ///
-/// Considers the proof complete when both sides have the same hash,
-/// which is a fast approximation of structural equality for hash-consed terms.
-pub struct HashEqualityGoalChecker;
+/// For equality expressions, checks if both sides have the same hash (i.e., they're equal),
+/// which means the reflexive axiom (x = x) applies.
+pub struct ReflexiveGoalChecker;
 
-impl<T: HashNodeInner> GoalChecker<T> for HashEqualityGoalChecker {
-    fn is_goal(&self, lhs: &HashNode<T>, rhs: &HashNode<T>) -> bool {
-        lhs.hash() == rhs.hash()
+impl ReflexiveGoalChecker {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for ReflexiveGoalChecker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<Node: HashNodeInner + Clone> GoalChecker<Node, BinaryTruth> for ReflexiveGoalChecker {
+    fn check(&self, _expr: &HashNode<Node>) -> Option<BinaryTruth> {
+        // For a generic node, we can't check if it's an equality with two sides.
+        // This is meant to be overridden by domain-specific implementations.
+        // For PA, this should check if both sides of PeanoContent::Equals are equal.
+        None
     }
 }
 
@@ -311,21 +275,20 @@ mod tests {
     #[test]
     fn test_cost_estimator() {
         let store = NodeStorage::new();
-        let lhs = HashNode::from_store(42u64, &store);
-        let rhs = HashNode::from_store(42u64, &store);
-        let estimator = SizeHashCostEstimator;
+        let expr = HashNode::from_store(42u64, &store);
+        let estimator = SizeCostEstimator;
 
-        let cost = estimator.estimate_cost(&lhs, &rhs);
-        // Same value should have low cost (size + size + 0 hash distance)
-        assert_eq!(cost, 2); // 1 + 1 + 0
+        let cost = estimator.estimate_cost(&expr);
+        assert_eq!(cost, 1); // size of u64 is 1
     }
 
     #[test]
-    fn test_goal_checker() {
+    fn test_reflexive_goal_checker() {
+        let checker = ReflexiveGoalChecker::new();
         let store = NodeStorage::new();
         let expr = HashNode::from_store(42u64, &store);
-        let checker = HashEqualityGoalChecker;
 
-        assert!(checker.is_goal(&expr, &expr));
+        // For a generic node (not an equality), the checker returns None
+        assert_eq!(checker.check(&expr), None);
     }
 }
