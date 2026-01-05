@@ -8,6 +8,7 @@ use corpus_core::rewriting::RewriteRule;
 pub type PeanoExpression = DomainExpression<BinaryTruth, PeanoContent>;
 
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum PeanoContent {
     Equals(
         HashNode<ArithmeticExpression>,
@@ -16,6 +17,7 @@ pub enum PeanoContent {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum ArithmeticExpression {
     Add(
         HashNode<ArithmeticExpression>,
@@ -72,7 +74,7 @@ impl HashNodeInner for PeanoContent {
     fn rewrite_any_subterm<F>(
         &self,
         node: &HashNode<Self>,
-        store: &NodeStorage<Self>,
+        _store: &NodeStorage<Self>,
         try_rewrite: &F,
     ) -> Option<HashNode<Self>>
     where
@@ -85,7 +87,7 @@ impl HashNodeInner for PeanoContent {
 
         // Then try rewriting subterms (the arithmetic expressions on each side)
         match self {
-            PeanoContent::Equals(left, right) => {
+            PeanoContent::Equals(_left, _right) => {
                 // Note: We can't directly call try_rewrite on left/right because they
                 // are HashNode<ArithmeticExpression> but try_rewrite expects HashNode<PeanoContent>.
                 // This will be handled by creating wrapper rewrite rules that know how to
@@ -228,37 +230,37 @@ pub fn get_all_rewrites_for_equality(
 ) -> Vec<HashNode<PeanoContent>> {
     let mut rewrites = Vec::new();
 
-    if let PeanoContent::Equals(left, right) = equality.value.as_ref() {
-        // Create an arithmetic expression store for applying rules
-        let arith_store = NodeStorage::<ArithmeticExpression>::new();
+    let PeanoContent::Equals(left, right) = equality.value.as_ref();
+    
+    // Create an arithmetic expression store for applying rules
+    let arith_store = NodeStorage::<ArithmeticExpression>::new();
 
-        // Try applying each arithmetic rule to the left subterm
-        for rule in arithmetic_rules {
-            // Forward direction: apply pattern to get replacement
-            if let Some(new_left) = rule.apply(left, &arith_store) {
-                let new_content = PeanoContent::Equals(new_left, right.clone());
-                rewrites.push(HashNode::from_store(new_content, _store));
-            }
+    // Try applying each arithmetic rule to the left subterm
+    for rule in arithmetic_rules {
+        // Forward direction: apply pattern to get replacement
+        if let Some(new_left) = rule.apply(left, &arith_store) {
+            let new_content = PeanoContent::Equals(new_left, right.clone());
+            rewrites.push(HashNode::from_store(new_content, _store));
+        }
 
-            // Reverse direction: apply replacement to get pattern
-            if let Some(new_left) = rule.apply_reverse(left, &arith_store) {
-                let new_content = PeanoContent::Equals(new_left, right.clone());
-                rewrites.push(HashNode::from_store(new_content, _store));
-            }
+        // Reverse direction: apply replacement to get pattern
+        if let Some(new_left) = rule.apply_reverse(left, &arith_store) {
+            let new_content = PeanoContent::Equals(new_left, right.clone());
+            rewrites.push(HashNode::from_store(new_content, _store));
+        }
 
-            // Try the right subterm too
-            if let Some(new_right) = rule.apply(right, &arith_store) {
-                let new_content = PeanoContent::Equals(left.clone(), new_right);
-                rewrites.push(HashNode::from_store(new_content, _store));
-            }
+        // Try the right subterm too
+        if let Some(new_right) = rule.apply(right, &arith_store) {
+            let new_content = PeanoContent::Equals(left.clone(), new_right);
+            rewrites.push(HashNode::from_store(new_content, _store));
+        }
 
-            if let Some(new_right) = rule.apply_reverse(right, &arith_store) {
-                let new_content = PeanoContent::Equals(left.clone(), new_right);
-                rewrites.push(HashNode::from_store(new_content, _store));
-            }
+        if let Some(new_right) = rule.apply_reverse(right, &arith_store) {
+            let new_content = PeanoContent::Equals(left.clone(), new_right);
+            rewrites.push(HashNode::from_store(new_content, _store));
         }
     }
-
+    
     rewrites
 }
 
@@ -280,42 +282,6 @@ pub fn wrap_arithmetic_rules_for_equality(
     }).collect()
 }
 
-// Implement pattern extraction traits for cross-level rewrite rules
-
-use corpus_core::base::pattern_traits::{EqualityExtractable, SuccessorExtractable, AddExtractable};
-
-impl EqualityExtractable for PeanoContent {
-    type SubExpr = ArithmeticExpression;
-
-    fn as_equals(&self) -> Option<(&HashNode<ArithmeticExpression>, &HashNode<ArithmeticExpression>)> {
-        match self {
-            PeanoContent::Equals(left, right) => Some((left, right)),
-        }
-    }
-}
-
-impl SuccessorExtractable for ArithmeticExpression {
-    type SubExpr = ArithmeticExpression;
-
-    fn as_successor(&self) -> Option<&HashNode<ArithmeticExpression>> {
-        match self {
-            ArithmeticExpression::Successor(inner) => Some(inner),
-            _ => None,
-        }
-    }
-}
-
-impl AddExtractable for ArithmeticExpression {
-    type SubExpr = ArithmeticExpression;
-
-    fn as_add(&self) -> Option<(&HashNode<ArithmeticExpression>, &HashNode<ArithmeticExpression>)> {
-        match self {
-            ArithmeticExpression::Add(left, right) => Some((left, right)),
-            _ => None,
-        }
-    }
-}
-
 /// Apply successor injectivity rewrite: S(x) = S(y) -> x = y
 ///
 /// If both sides of the equality are successor expressions, rewrite to
@@ -324,15 +290,18 @@ pub fn apply_successor_injectivity(
     equality: &HashNode<PeanoContent>,
     store: &NodeStorage<PeanoContent>,
 ) -> Option<HashNode<PeanoContent>> {
-    if let PeanoContent::Equals(left, right) = equality.value.as_ref() {
-        // Check if both sides are Successor expressions
-        let left_inner = left.value.as_successor()?;
-        let right_inner = right.value.as_successor()?;
+    let PeanoContent::Equals(left, right) = equality.value.as_ref();
+    
+    // Check if both sides are Successor expressions
+    let ArithmeticExpression::Successor(left_inner) = left.value.as_ref() else {
+        return None;
+    };
+    
+    let ArithmeticExpression::Successor(right_inner) = right.value.as_ref() else {
+        return None;
+    };
 
-        // Create new equality: left_inner = right_inner
-        let new_content = PeanoContent::Equals(left_inner.clone(), right_inner.clone());
-        Some(HashNode::from_store(new_content, store))
-    } else {
-        None
-    }
+    // Create new equality: left_inner = right_inner
+    let new_content = PeanoContent::Equals(left_inner.clone(), right_inner.clone());
+    Some(HashNode::from_store(new_content, store))
 }

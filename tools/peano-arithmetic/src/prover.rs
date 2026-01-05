@@ -121,38 +121,37 @@ fn get_all_rewrites_with_names(
 ) -> Vec<(HashNode<PeanoContent>, String)> {
     let mut results = Vec::new();
 
-    if let PeanoContent::Equals(left, right) = equality.value.as_ref() {
-        let arith_store = NodeStorage::<crate::syntax::ArithmeticExpression>::new();
+    let PeanoContent::Equals(left, right) = equality.value.as_ref();
+    let arith_store = NodeStorage::<crate::syntax::ArithmeticExpression>::new();
 
-        // Try each arithmetic rule on both sides
-        for rule in arithmetic_rules {
-            // Forward direction on left
-            if let Some(new_left) = rule.apply(left, &arith_store) {
-                let new_content = PeanoContent::Equals(new_left, right.clone());
-                let new_expr = HashNode::from_store(new_content, store);
-                results.push((new_expr, rule.name.clone()));
-            }
+    // Try each arithmetic rule on both sides
+    for rule in arithmetic_rules {
+        // Forward direction on left
+        if let Some(new_left) = rule.apply(left, &arith_store) {
+            let new_content = PeanoContent::Equals(new_left, right.clone());
+            let new_expr = HashNode::from_store(new_content, store);
+            results.push((new_expr, rule.name.clone()));
+        }
 
-            // Reverse direction on left
-            if let Some(new_left) = rule.apply_reverse(left, &arith_store) {
-                let new_content = PeanoContent::Equals(new_left, right.clone());
-                let new_expr = HashNode::from_store(new_content, store);
-                results.push((new_expr, format!("{}_reverse", rule.name)));
-            }
+        // Reverse direction on left
+        if let Some(new_left) = rule.apply_reverse(left, &arith_store) {
+            let new_content = PeanoContent::Equals(new_left, right.clone());
+            let new_expr = HashNode::from_store(new_content, store);
+            results.push((new_expr, format!("{}_reverse", rule.name)));
+        }
 
-            // Forward direction on right
-            if let Some(new_right) = rule.apply(right, &arith_store) {
-                let new_content = PeanoContent::Equals(left.clone(), new_right);
-                let new_expr = HashNode::from_store(new_content, store);
-                results.push((new_expr, rule.name.clone()));
-            }
+        // Forward direction on right
+        if let Some(new_right) = rule.apply(right, &arith_store) {
+            let new_content = PeanoContent::Equals(left.clone(), new_right);
+            let new_expr = HashNode::from_store(new_content, store);
+            results.push((new_expr, rule.name.clone()));
+        }
 
-            // Reverse direction on right
-            if let Some(new_right) = rule.apply_reverse(right, &arith_store) {
-                let new_content = PeanoContent::Equals(left.clone(), new_right);
-                let new_expr = HashNode::from_store(new_content, store);
-                results.push((new_expr, format!("{}_reverse", rule.name)));
-            }
+        // Reverse direction on right
+        if let Some(new_right) = rule.apply_reverse(right, &arith_store) {
+            let new_content = PeanoContent::Equals(left.clone(), new_right);
+            let new_expr = HashNode::from_store(new_content, store);
+            results.push((new_expr, format!("{}_reverse", rule.name)));
         }
     }
 

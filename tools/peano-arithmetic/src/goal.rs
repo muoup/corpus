@@ -6,7 +6,7 @@
 use corpus_classical_logic::BinaryTruth;
 use corpus_core::proving::GoalChecker;
 use corpus_core::base::nodes::HashNode;
-use crate::syntax::{PeanoContent, ArithmeticExpression};
+use crate::syntax::PeanoContent;
 
 /// Goal checker for Peano Arithmetic equalities.
 ///
@@ -43,17 +43,18 @@ impl GoalChecker<PeanoContent, BinaryTruth> for AxiomPatternChecker {
 /// When both sides of an equality have the same hash, they are structurally identical,
 /// meaning we've proven the original statement by rewriting it to a tautology.
 fn check_reflexive_equality(expr: &HashNode<PeanoContent>) -> Option<BinaryTruth> {
-    if let PeanoContent::Equals(left, right) = expr.value.as_ref() {
-        // Check if left and right sides have the same hash (are structurally equal)
-        if left.hash() == right.hash() {
-            return Some(BinaryTruth::True);
-        }
+    let PeanoContent::Equals(left, right) = expr.value.as_ref();
+    // Check if left and right sides have the same hash (are structurally equal)
+    if left.hash() == right.hash() {
+        return Some(BinaryTruth::True);
     }
     None
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::syntax::ArithmeticExpression;
+
     use super::*;
     use corpus_core::base::nodes::NodeStorage;
 

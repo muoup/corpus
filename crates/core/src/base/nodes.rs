@@ -122,7 +122,7 @@ impl Hashing {
     }
 
     pub fn root_hash(root_opcode: u64, children: &[u64]) -> u64 {
-        let mut result = root_opcode as u64;
+        let mut result = root_opcode;
         for &h in children {
             result = Self::hash_combine(result, h);
         }
@@ -136,7 +136,7 @@ impl Hashing {
             hash = Self::hash_combine(hash, *byte as u64);
         }
         
-        return hash;
+        hash
     }
 }
 

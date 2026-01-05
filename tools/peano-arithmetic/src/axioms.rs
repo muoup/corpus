@@ -1,9 +1,10 @@
 use corpus_core::nodes::{Hashing};
-use crate::syntax::{ArithmeticExpression, PeanoContent};
+use crate::syntax::ArithmeticExpression;
 use corpus_core::rewriting::{RewriteRule, Pattern, RewriteDirection};
 
 pub fn peano_arithmetic_rules() -> Vec<RewriteRule<ArithmeticExpression>> {
     vec![
+        axiom2_rule(),
         axiom3_rule(),
         axiom4_rule(),
     ]
@@ -50,6 +51,6 @@ mod tests {
     #[test]
     fn test_axiom_rules_creation() {
         let rules = peano_arithmetic_rules();
-        assert_eq!(rules.len(), 2);
+        assert_eq!(rules.len(), 3);
     }
 }
