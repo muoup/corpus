@@ -6,9 +6,10 @@
 //! - Direct match: theorem matches axiom → True
 //! - Negation match: theorem matches ¬(axiom_body) → False
 
+use crate::expression::{ClassicalLogicalExpression, DomainContent};
+use std::fmt::Display;
 use corpus_core::base::axioms::NamedAxiom;
 use corpus_core::base::nodes::HashNodeInner;
-use corpus_core::expression::{DomainContent, LogicalExpression};
 use corpus_core::logic::LogicalOperator;
 use corpus_core::nodes::HashNode;
 use corpus_core::proving::GoalChecker;
@@ -30,40 +31,40 @@ use std::sync::Arc;
 pub struct AxiomGoalChecker<T, D, Op>
 where
     T: TruthValue + HashNodeInner,
-    D: DomainContent<T> + Clone + std::fmt::Debug,
-    Op: LogicalOperator<T> + HashNodeInner,
+    D: DomainContent<T> + Clone + std::fmt::Debug + Display,
+    Op: LogicalOperator<T> + HashNodeInner + Display,
 {
-    axioms: Arc<Vec<NamedAxiom<T, D, Op>>>,
+    axioms: Arc<Vec<NamedAxiom<ClassicalLogicalExpression<T, D, Op>>>>,
 }
 
 impl<T, D, Op> AxiomGoalChecker<T, D, Op>
 where
     T: TruthValue + HashNodeInner,
-    D: DomainContent<T> + Clone + std::fmt::Debug,
-    Op: LogicalOperator<T> + HashNodeInner,
+    D: DomainContent<T> + Clone + std::fmt::Debug + Display,
+    Op: LogicalOperator<T> + HashNodeInner + Display,
     Op::Symbol: AsRef<str>,
 {
     /// Create a new axiom goal checker with the given axioms.
-    pub fn new(axioms: Vec<NamedAxiom<T, D, Op>>) -> Self {
+    pub fn new(axioms: Vec<NamedAxiom<ClassicalLogicalExpression<T, D, Op>>>) -> Self {
         Self {
             axioms: Arc::new(axioms),
         }
     }
 
     /// Get the axioms used by this checker.
-    pub fn axioms(&self) -> &[NamedAxiom<T, D, Op>] {
+    pub fn axioms(&self) -> &[NamedAxiom<ClassicalLogicalExpression<T, D, Op>>] {
         &self.axioms
     }
 }
 
-impl<T, D, Op> GoalChecker<LogicalExpression<T, D, Op>, T> for AxiomGoalChecker<T, D, Op>
+impl<T, D, Op> GoalChecker<ClassicalLogicalExpression<T, D, Op>, T> for AxiomGoalChecker<T, D, Op>
 where
     T: TruthValue + PartialEq + HashNodeInner,
-    D: DomainContent<T> + Clone + std::fmt::Debug,
-    Op: LogicalOperator<T> + Clone + HashNodeInner,
+    D: DomainContent<T> + Clone + std::fmt::Debug + Display,
+    Op: LogicalOperator<T> + Clone + HashNodeInner + Display,
     Op::Symbol: AsRef<str>,
 {
-    fn check(&self, theorem: &HashNode<LogicalExpression<T, D, Op>>) -> Option<T> {
+    fn check(&self, theorem: &HashNode<ClassicalLogicalExpression<T, D, Op>>) -> Option<T> {
         // Check each axiom for a match
         for axiom in &*self.axioms {
             if let Some(result) = check_axiom_match(theorem, axiom) {
@@ -81,16 +82,16 @@ where
 /// - `Some(False)` if theorem matches negation of axiom body
 /// - `None` if no match
 fn check_axiom_match<T, D, Op>(
-    theorem: &HashNode<LogicalExpression<T, D, Op>>,
-    axiom: &NamedAxiom<T, D, Op>,
+    theorem: &HashNode<ClassicalLogicalExpression<T, D, Op>>,
+    axiom: &NamedAxiom<ClassicalLogicalExpression<T, D, Op>>,
 ) -> Option<T>
 where
     T: TruthValue + PartialEq + HashNodeInner,
-    D: DomainContent<T> + Clone + std::fmt::Debug,
-    Op: LogicalOperator<T> + Clone + HashNodeInner,
+    D: DomainContent<T> + Clone + std::fmt::Debug + Display,
+    Op: LogicalOperator<T> + Clone + HashNodeInner + Display,
     Op::Symbol: AsRef<str>,
 {
-    use LogicalExpression::*;
+    use ClassicalLogicalExpression::*;
 
     match axiom.expression.value.as_ref() {
         // Handle quantified axioms: ∀x. P(x) or ∃x. P(x)
@@ -142,8 +143,8 @@ where
 fn is_quantifier<T, D, Op>(op: &Op) -> bool
 where
     T: TruthValue,
-    D: DomainContent<T>,
-    Op: LogicalOperator<T>,
+    D: DomainContent<T> + Display,
+    Op: LogicalOperator<T> + Display,
     Op::Symbol: AsRef<str>,
 {
     let symbol = op.symbol();
@@ -155,13 +156,13 @@ where
 /// For goal checking, we care about whether the FORM matches, not specific
 /// variable bindings. We use hash-based structural equality as a starting point.
 fn expressions_match<T, D, Op>(
-    a: &HashNode<LogicalExpression<T, D, Op>>,
-    b: &HashNode<LogicalExpression<T, D, Op>>,
+    a: &HashNode<ClassicalLogicalExpression<T, D, Op>>,
+    b: &HashNode<ClassicalLogicalExpression<T, D, Op>>,
 ) -> bool
 where
     T: TruthValue + HashNodeInner,
-    D: DomainContent<T> + HashNodeInner,
-    Op: LogicalOperator<T> + HashNodeInner,
+    D: DomainContent<T> + HashNodeInner + Display,
+    Op: LogicalOperator<T> + HashNodeInner + Display,
 {
     // Hash-based structural matching
     // TODO: This could be refined to handle variable bindings more carefully
@@ -171,17 +172,17 @@ where
 
 /// Extract the body of a negation: ¬P → P
 fn extract_negation<T, D, Op>(
-    expr: &HashNode<LogicalExpression<T, D, Op>>,
-) -> Option<HashNode<LogicalExpression<T, D, Op>>>
+    expr: &HashNode<ClassicalLogicalExpression<T, D, Op>>,
+) -> Option<HashNode<ClassicalLogicalExpression<T, D, Op>>>
 where
     T: TruthValue + HashNodeInner,
-    D: DomainContent<T> + HashNodeInner,
-    Op: LogicalOperator<T> + HashNodeInner,
+    D: DomainContent<T> + HashNodeInner + Display,
+    Op: LogicalOperator<T> + HashNodeInner + Display,
     Op::Symbol: AsRef<str>,
 {
     let symbol = expr.value.as_ref().operator()?.symbol();
     if symbol.as_ref() == "¬" {
-        if let LogicalExpression::Compound { operands, .. } = expr.value.as_ref() {
+        if let ClassicalLogicalExpression::Compound { operands, .. } = expr.value.as_ref() {
             return operands.first().cloned();
         }
     }
@@ -193,7 +194,7 @@ mod tests {
     use super::*;
     use crate::BinaryTruth;
     use corpus_core::base::nodes::HashNodeInner;
-    use corpus_core::expression::DomainContent;
+    use crate::expression::DomainContent;
 
     #[test]
     fn test_extract_negation() {
@@ -203,6 +204,7 @@ mod tests {
     #[test]
     fn test_is_quantifier() {
         use crate::ClassicalOperator;
+        use std::fmt;
 
         // Create a minimal DomainContent implementation for testing
         struct TestDomain;
@@ -215,6 +217,11 @@ mod tests {
             }
             fn size(&self) -> u64 {
                 1
+            }
+        }
+        impl fmt::Display for TestDomain {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "TestDomain")
             }
         }
 

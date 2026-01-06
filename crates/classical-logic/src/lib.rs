@@ -1,4 +1,5 @@
 pub mod axioms;
+pub mod expression;
 pub mod goal;
 pub mod operators;
 pub mod truth;
@@ -7,6 +8,9 @@ use std::ops::{Deref, DerefMut};
 
 use corpus_core::logic::LogicalOperatorSet;
 use corpus_core::truth::TruthValue;
+
+// Re-exports from expression module
+pub use expression::{ClassicalLogicalExpression, DomainContent, LogicalExpression};
 
 pub use axioms::ClassicalAxiomConverter;
 pub use corpus_core::base::axioms::{InferenceDirection, InferenceDirectional, NamedAxiom};

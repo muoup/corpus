@@ -4,9 +4,9 @@
 //! `AxiomGoalChecker` from the classical-logic crate. It determines if a
 //! theorem has been proven by checking if it matches any PA axiom.
 
-use corpus_classical_logic::{BinaryTruth, ClassicalOperator, AxiomGoalChecker};
+use corpus_classical_logic::{BinaryTruth, ClassicalLogicalExpression, ClassicalOperator, AxiomGoalChecker};
 use corpus_core::proving::GoalChecker;
-use crate::syntax::{PeanoContent, PeanoLogicalNode};
+use crate::syntax::{PeanoContent, PeanoLogicalExpression, PeanoLogicalNode};
 use crate::axioms::peano_arithmetic_axioms_with_goals;
 
 /// PA goal checker using generic axiom-based goal checking.
@@ -34,7 +34,7 @@ impl PeanoGoalChecker {
     }
 
     /// Create a new PA goal checker with custom axioms.
-    pub fn with_axioms(axioms: Vec<corpus_classical_logic::NamedAxiom<BinaryTruth, PeanoContent, ClassicalOperator>>) -> Self {
+    pub fn with_axioms(axioms: Vec<corpus_core::base::axioms::NamedAxiom<PeanoLogicalExpression>>) -> Self {
         Self {
             inner: AxiomGoalChecker::new(axioms),
         }
@@ -47,7 +47,7 @@ impl Default for PeanoGoalChecker {
     }
 }
 
-impl GoalChecker<crate::syntax::PeanoLogicalExpression, BinaryTruth> for PeanoGoalChecker {
+impl GoalChecker<PeanoLogicalExpression, BinaryTruth> for PeanoGoalChecker {
     fn check(&self, expr: &PeanoLogicalNode) -> Option<BinaryTruth> {
         self.inner.check(expr)
     }
@@ -57,7 +57,7 @@ impl GoalChecker<crate::syntax::PeanoLogicalExpression, BinaryTruth> for PeanoGo
 mod tests {
     use super::*;
     use corpus_core::base::nodes::{HashNode, NodeStorage};
-    use corpus_core::expression::LogicalExpression;
+    use corpus_classical_logic::ClassicalLogicalExpression;
 
     #[test]
     fn test_reflexive_equality_accepted() {
@@ -71,7 +71,7 @@ mod tests {
             crate::syntax::PeanoContent::Equals(var.clone(), var),
             &NodeStorage::new()
         );
-        let expr = HashNode::from_store(LogicalExpression::Atomic(content), &store);
+        let expr = HashNode::from_store(ClassicalLogicalExpression::atomic(content), &store);
         assert_eq!(checker.check(&expr), Some(BinaryTruth::True));
     }
 
@@ -91,7 +91,7 @@ mod tests {
             crate::syntax::PeanoContent::Equals(var, s_var),
             &NodeStorage::new()
         );
-        let expr = HashNode::from_store(LogicalExpression::Atomic(content), &store);
+        let expr = HashNode::from_store(ClassicalLogicalExpression::atomic(content), &store);
         assert_eq!(checker.check(&expr), Some(BinaryTruth::False));
     }
 }

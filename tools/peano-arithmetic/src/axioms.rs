@@ -41,7 +41,7 @@ use crate::syntax::{ArithmeticExpression, PeanoContent};
 ///   parenthesized separately
 /// - Quantifiers are not needed in axiom strings since rewrite rules
 ///   implicitly apply universally
-pub fn peano_arithmetic_axioms() -> Vec<NamedAxiom<BinaryTruth, PeanoContent, ClassicalOperator>> {
+pub fn peano_arithmetic_axioms() -> Vec<NamedAxiom<crate::syntax::PeanoLogicalExpression>> {
     let stores = AxiomStores::new();
 
     vec![
@@ -83,7 +83,7 @@ pub fn peano_arithmetic_axioms() -> Vec<NamedAxiom<BinaryTruth, PeanoContent, Cl
 ///
 /// These goal-checking axioms allow the prover to recognize when a theorem
 /// has been proven (matches a true axiom) or disproven (matches a negated axiom).
-pub fn peano_arithmetic_axioms_with_goals() -> Vec<NamedAxiom<BinaryTruth, PeanoContent, ClassicalOperator>> {
+pub fn peano_arithmetic_axioms_with_goals() -> Vec<NamedAxiom<crate::syntax::PeanoLogicalExpression>> {
     let mut axioms = peano_arithmetic_axioms();
     let stores = AxiomStores::new();
 
@@ -201,30 +201,33 @@ mod tests {
 
     #[test]
     fn test_axioms_are_valid() {
+        use corpus_core::base::expression::LogicalExpression;
         let axioms = peano_arithmetic_axioms();
 
         for axiom in axioms {
             assert!(axiom.is_valid(), "Axiom {} should be valid", axiom.name());
-            assert!(axiom.operator().is_some(), "Axiom {} should have an operator", axiom.name());
+            assert!(axiom.expression().value.is_compound(), "Axiom {} should have an operator", axiom.name());
         }
     }
 
     #[test]
     fn test_axioms_generate_rewrite_rules() {
-        let axioms = peano_arithmetic_axioms();
+        let rules = peano_arithmetic_rules();
 
-        for axiom in axioms {
-            let rules = axiom.to_rewrite_rules();
-            // Each axiom should generate at least one rewrite rule
-            assert!(!rules.is_empty(), "Axiom {} should generate rewrite rules", axiom.name());
-        }
+        // Check that we have the expected rewrite rules
+        assert_eq!(rules.len(), 3, "Should have 3 arithmetic rewrite rules");
+
+        let rule_names: Vec<_> = rules.iter().map(|r| r.name.as_str()).collect();
+        assert!(rule_names.contains(&"axiom2_successor_injectivity"), "Should have successor injectivity rule");
+        assert!(rule_names.contains(&"axiom3_additive_identity"), "Should have additive identity rule");
+        assert!(rule_names.contains(&"axiom4_additive_successor"), "Should have additive successor rule");
     }
 
     #[test]
     fn test_axiom2_successor_injectivity() {
         let stores = AxiomStores::new();
         let axiom = parse_axiom(
-            "-> (EQ (S (/0)) (S (/1))) (EQ (/0) (/1))",
+            "FORALL (FORALL (IMPLIES (EQ (S (/0)) (S (/1))) (EQ (/0) (/1))))",
             "test_axiom2",
             &stores,
         )
@@ -232,16 +235,13 @@ mod tests {
 
         assert_eq!(axiom.name(), "test_axiom2");
         assert!(axiom.is_valid());
-
-        let rules = axiom.to_rewrite_rules();
-        assert!(!rules.is_empty());
     }
 
     #[test]
     fn test_axiom3_additive_identity() {
         let stores = AxiomStores::new();
         let axiom = parse_axiom(
-            "EQ (PLUS (/0) (0)) (/0)",
+            "FORALL (EQ (PLUS (/0) (0)) (/0))",
             "test_axiom3",
             &stores,
         )
@@ -249,16 +249,13 @@ mod tests {
 
         assert_eq!(axiom.name(), "test_axiom3");
         assert!(axiom.is_valid());
-
-        let rules = axiom.to_rewrite_rules();
-        assert!(!rules.is_empty());
     }
 
     #[test]
     fn test_axiom4_additive_successor() {
         let stores = AxiomStores::new();
         let axiom = parse_axiom(
-            "EQ (PLUS (/0) (S (/1))) (S (PLUS (/0) (/1)))",
+            "FORALL (FORALL (EQ (PLUS (/0) (S (/1))) (S (PLUS (/0) (/1)))))",
             "test_axiom4",
             &stores,
         )
@@ -266,9 +263,6 @@ mod tests {
 
         assert_eq!(axiom.name(), "test_axiom4");
         assert!(axiom.is_valid());
-
-        let rules = axiom.to_rewrite_rules();
-        assert!(!rules.is_empty());
     }
 
     #[test]

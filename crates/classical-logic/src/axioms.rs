@@ -2,13 +2,14 @@
 //!
 //! This module provides concrete implementations for classical logical operators.
 
+use crate::expression::{ClassicalLogicalExpression, DomainContent};
 use crate::operators::ClassicalOperator;
 use corpus_core::base::axioms::{AxiomConverter, InferenceDirection, InferenceDirectional};
-use corpus_core::base::expression::{DomainContent, LogicalExpression};
 use corpus_core::base::nodes::{HashNode, HashNodeInner};
 use corpus_core::rewriting::{Pattern, RewriteDirection, RewriteRule};
 use corpus_core::truth::TruthValue;
 use std::clone::Clone;
+use std::fmt::{Debug, Display};
 
 impl InferenceDirectional for ClassicalOperator {
     fn inference_direction(&self) -> InferenceDirection {
@@ -30,25 +31,25 @@ impl InferenceDirectional for ClassicalOperator {
 /// This struct provides the conversion logic specific to classical operators.
 pub struct ClassicalAxiomConverter;
 
-impl<T: TruthValue, D: DomainContent<T>> AxiomConverter<T, D, ClassicalOperator> for ClassicalAxiomConverter
+impl<T: TruthValue, D: DomainContent<T>> AxiomConverter<ClassicalLogicalExpression<T, D, ClassicalOperator>> for ClassicalAxiomConverter
 where
     T: HashNodeInner,
-    D: HashNodeInner + Clone,
+    D: HashNodeInner + Clone + Debug + Display,
 {
     fn convert_axiom(
         &self,
-        expr: &HashNode<LogicalExpression<T, D, ClassicalOperator>>,
+        expr: &HashNode<ClassicalLogicalExpression<T, D, ClassicalOperator>>,
         name: &str,
-    ) -> Result<Vec<RewriteRule<LogicalExpression<T, D, ClassicalOperator>>>, corpus_core::base::axioms::AxiomError> {
+    ) -> Result<Vec<RewriteRule<ClassicalLogicalExpression<T, D, ClassicalOperator>>>, corpus_core::base::axioms::AxiomError> {
         convert_classical_axiom_to_rules(expr, name)
     }
 }
 
 /// Convert a classical logical expression to rewrite rules based on its operator.
 fn convert_classical_axiom_to_rules<T: TruthValue, D: DomainContent<T>>(
-    axiom: &HashNode<LogicalExpression<T, D, ClassicalOperator>>,
+    axiom: &HashNode<ClassicalLogicalExpression<T, D, ClassicalOperator>>,
     axiom_name: &str,
-) -> Result<Vec<RewriteRule<LogicalExpression<T, D, ClassicalOperator>>>, corpus_core::base::axioms::AxiomError>
+) -> Result<Vec<RewriteRule<ClassicalLogicalExpression<T, D, ClassicalOperator>>>, corpus_core::base::axioms::AxiomError>
 where
     T: HashNodeInner,
     D: HashNodeInner + Clone,
@@ -58,7 +59,7 @@ where
     let expr_ref = axiom.value.as_ref();
 
     // Must be a compound expression
-    let LogicalExpression::Compound { operator, operands, .. } = expr_ref else {
+    let ClassicalLogicalExpression::Compound { operator, operands, .. } = expr_ref else {
         return Err(AxiomError::NotAnAxiom);
     };
 
@@ -91,9 +92,9 @@ where
 /// Create a bidirectional rewrite rule from an equality axiom.
 fn create_equality_rule<T: TruthValue, D: DomainContent<T>>(
     name: &str,
-    lhs: &HashNode<LogicalExpression<T, D, ClassicalOperator>>,
-    rhs: &HashNode<LogicalExpression<T, D, ClassicalOperator>>,
-) -> RewriteRule<LogicalExpression<T, D, ClassicalOperator>>
+    lhs: &HashNode<ClassicalLogicalExpression<T, D, ClassicalOperator>>,
+    rhs: &HashNode<ClassicalLogicalExpression<T, D, ClassicalOperator>>,
+) -> RewriteRule<ClassicalLogicalExpression<T, D, ClassicalOperator>>
 where
     T: HashNodeInner,
     D: HashNodeInner + Clone,
@@ -106,9 +107,9 @@ where
 /// Create a forward rewrite rule from an implication axiom.
 fn create_implication_rule<T: TruthValue, D: DomainContent<T>>(
     name: &str,
-    antecedent: &HashNode<LogicalExpression<T, D, ClassicalOperator>>,
-    consequent: &HashNode<LogicalExpression<T, D, ClassicalOperator>>,
-) -> RewriteRule<LogicalExpression<T, D, ClassicalOperator>>
+    antecedent: &HashNode<ClassicalLogicalExpression<T, D, ClassicalOperator>>,
+    consequent: &HashNode<ClassicalLogicalExpression<T, D, ClassicalOperator>>,
+) -> RewriteRule<ClassicalLogicalExpression<T, D, ClassicalOperator>>
 where
     T: HashNodeInner,
     D: HashNodeInner + Clone,
@@ -118,24 +119,24 @@ where
     RewriteRule::new(name, antecedent_pattern, consequent_pattern, RewriteDirection::Forward)
 }
 
-/// Convert a LogicalExpression to a Pattern.
+/// Convert a ClassicalLogicalExpression to a Pattern.
 fn expression_to_pattern<T: TruthValue, D: DomainContent<T>>(
-    expr: &HashNode<LogicalExpression<T, D, ClassicalOperator>>,
-) -> Pattern<LogicalExpression<T, D, ClassicalOperator>>
+    expr: &HashNode<ClassicalLogicalExpression<T, D, ClassicalOperator>>,
+) -> Pattern<ClassicalLogicalExpression<T, D, ClassicalOperator>>
 where
     T: HashNodeInner,
     D: HashNodeInner + Clone,
 {
     match expr.value.as_ref() {
-        LogicalExpression::Atomic(_) => {
+        ClassicalLogicalExpression::Atomic(_) => {
             Pattern::constant(expr.value.as_ref().clone())
         }
-        LogicalExpression::Compound { operator, operands, .. } => {
+        ClassicalLogicalExpression::Compound { operator, operands, .. } => {
             let arg_patterns: Vec<_> = operands
                 .iter()
                 .enumerate()
                 .map(|(i, op)| {
-                    if matches!(op.value.as_ref(), LogicalExpression::Atomic(_)) {
+                    if matches!(op.value.as_ref(), ClassicalLogicalExpression::Atomic(_)) {
                         expression_to_pattern(op)
                     } else {
                         Pattern::var(i as u32)

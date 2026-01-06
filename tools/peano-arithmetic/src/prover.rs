@@ -3,17 +3,16 @@
 //! This module provides a thin wrapper around the core `Prover` type,
 //! specializing it for Peano Arithmetic with default implementations.
 //!
-//! It uses `LogicalExpression` to support quantifiers and full first-order logic.
+//! It uses `ClassicalLogicalExpression` to support quantifiers and full first-order logic.
 
 use crate::syntax::{PeanoContent, PeanoLogicalExpression, PeanoLogicalNode};
 use crate::goal::PeanoGoalChecker;
 use crate::axioms::peano_arithmetic_rules;
-use corpus_classical_logic::BinaryTruth;
+use corpus_classical_logic::{BinaryTruth, ClassicalLogicalExpression};
 use corpus_core::{
     base::nodes::{HashNode, NodeStorage},
     proving::{Prover, SizeCostEstimator, CostEstimator, GoalChecker, ProofResult, ProofState, ProofStep},
     rewriting::RewriteRule,
-    expression::LogicalExpression,
 };
 
 /// Type alias for the PA prover with LogicalExpression support.
@@ -140,25 +139,24 @@ fn get_all_rewrites_logical(
 
     match expr.value.as_ref() {
         // For quantified expressions, apply to body while preserving structure
-        LogicalExpression::Compound { operator, operands, .. }
+        ClassicalLogicalExpression::Compound { operator, operands, .. }
             if operator.symbol() == "∀" || operator.symbol() == "∃" =>
         {
             if let Some(body) = operands.first() {
                 // Recursively get rewrites from the body
                 for (new_body, rule_name) in get_all_rewrites_logical(body, store, arithmetic_rules) {
                     // Re-wrap with the quantifier
-                    let new_expr = LogicalExpression::Compound {
-                        operator: operator.clone(),
-                        operands: vec![new_body],
-                        _phantom: std::marker::PhantomData,
-                    };
+                    let new_expr = ClassicalLogicalExpression::compound(
+                        operator.clone(),
+                        vec![new_body],
+                    );
                     let wrapped = HashNode::from_store(new_expr, store);
                     results.push((wrapped, rule_name));
                 }
             }
         }
         // For atomic domain expressions, apply arithmetic rules
-        LogicalExpression::Atomic(domain) => {
+        ClassicalLogicalExpression::Atomic(domain) => {
             match domain.value.as_ref() {
                 PeanoContent::Equals(left, right) => {
                     let arith_store = NodeStorage::<crate::syntax::ArithmeticExpression>::new();
@@ -169,7 +167,7 @@ fn get_all_rewrites_logical(
                         if let Some(new_left) = rule.apply(left, &arith_store) {
                             let new_content = PeanoContent::Equals(new_left, right.clone());
                             let new_domain = HashNode::from_store(new_content, &NodeStorage::new());
-                            let new_expr = LogicalExpression::Atomic(new_domain);
+                            let new_expr = ClassicalLogicalExpression::atomic(new_domain);
                             let wrapped = HashNode::from_store(new_expr, store);
                             results.push((wrapped, rule.name.clone()));
                         }
@@ -178,7 +176,7 @@ fn get_all_rewrites_logical(
                         if let Some(new_left) = rule.apply_reverse(left, &arith_store) {
                             let new_content = PeanoContent::Equals(new_left, right.clone());
                             let new_domain = HashNode::from_store(new_content, &NodeStorage::new());
-                            let new_expr = LogicalExpression::Atomic(new_domain);
+                            let new_expr = ClassicalLogicalExpression::atomic(new_domain);
                             let wrapped = HashNode::from_store(new_expr, store);
                             results.push((wrapped, format!("{}_reverse", rule.name)));
                         }
@@ -187,7 +185,7 @@ fn get_all_rewrites_logical(
                         if let Some(new_right) = rule.apply(right, &arith_store) {
                             let new_content = PeanoContent::Equals(left.clone(), new_right);
                             let new_domain = HashNode::from_store(new_content, &NodeStorage::new());
-                            let new_expr = LogicalExpression::Atomic(new_domain);
+                            let new_expr = ClassicalLogicalExpression::atomic(new_domain);
                             let wrapped = HashNode::from_store(new_expr, store);
                             results.push((wrapped, rule.name.clone()));
                         }
@@ -196,7 +194,7 @@ fn get_all_rewrites_logical(
                         if let Some(new_right) = rule.apply_reverse(right, &arith_store) {
                             let new_content = PeanoContent::Equals(left.clone(), new_right);
                             let new_domain = HashNode::from_store(new_content, &NodeStorage::new());
-                            let new_expr = LogicalExpression::Atomic(new_domain);
+                            let new_expr = ClassicalLogicalExpression::atomic(new_domain);
                             let wrapped = HashNode::from_store(new_expr, store);
                             results.push((wrapped, format!("{}_reverse", rule.name)));
                         }
@@ -205,7 +203,7 @@ fn get_all_rewrites_logical(
                     // Try successor injectivity at the top level
                     if let Some(rewritten_content) = apply_successor_injectivity_to_logical(domain) {
                         let new_domain = HashNode::from_store(rewritten_content, &NodeStorage::new());
-                        let new_expr = LogicalExpression::Atomic(new_domain);
+                        let new_expr = ClassicalLogicalExpression::atomic(new_domain);
                         let wrapped = HashNode::from_store(new_expr, store);
                         results.push((wrapped, "successor_injectivity".to_string()));
                     }
@@ -216,17 +214,16 @@ fn get_all_rewrites_logical(
             }
         }
         // For other compound expressions (AND, OR, etc.), apply to operands
-        LogicalExpression::Compound { operator, operands, .. } => {
+        ClassicalLogicalExpression::Compound { operator, operands, .. } => {
             // Try applying rewrites to each operand
             for (i, operand) in operands.iter().enumerate() {
                 for (new_operand, rule_name) in get_all_rewrites_logical(operand, store, arithmetic_rules) {
                     let mut new_operands = operands.clone();
                     new_operands[i] = new_operand;
-                    let new_expr = LogicalExpression::Compound {
-                        operator: operator.clone(),
-                        operands: new_operands,
-                        _phantom: std::marker::PhantomData,
-                    };
+                    let new_expr = ClassicalLogicalExpression::compound(
+                        operator.clone(),
+                        new_operands,
+                    );
                     let wrapped = HashNode::from_store(new_expr, store);
                     results.push((wrapped, rule_name.clone()));
                 }

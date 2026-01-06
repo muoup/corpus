@@ -1,9 +1,8 @@
-use corpus_core::DomainExpression;
-use corpus_core::base::nodes::HashNode;
-use corpus_core::expression::LogicalExpression;
 use corpus_core::proving::{Prover, SizeCostEstimator};
+use corpus_classical_logic::BinaryTruth;
 use peano_arithmetic::parsing::Parser;
 use peano_arithmetic::goal::PeanoGoalChecker;
+use peano_arithmetic::syntax::PeanoLogicalExpression;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -20,7 +19,7 @@ fn main() {
     println!("Parsing theorem: {}", theorem);
 
     let mut parser = Parser::new(theorem);
-    
+
     match parser.parse_proposition() {
         Ok(proposition) => {
             println!("Theorem: {}", proposition);
@@ -30,14 +29,10 @@ fn main() {
 
             // Create the prover with PeanoGoalChecker (axiom-based goal checking)
             let goal_checker = PeanoGoalChecker::new();
-            let prover = Prover::new(10000, SizeCostEstimator, goal_checker);
-            
-            let proposition_as_domain = match proposition.value.as_ref() {
-                DomainExpression::Logical(logical_expr) => logical_expr.clone(),
-                DomainExpression::Domain(domain) => HashNode::from_store(LogicalExpression::Atomic(domain.clone()), &parser.logical_store)
-            };
+            let prover: Prover<PeanoLogicalExpression, SizeCostEstimator, BinaryTruth, _> =
+                Prover::new(10000, SizeCostEstimator, goal_checker);
 
-            match prover.prove(&proposition_as_domain) {
+            match prover.prove(&proposition) {
                 Some(_) => {
                     println!("");
                     println!("✓ Theorem proved!");

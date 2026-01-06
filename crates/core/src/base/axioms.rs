@@ -3,47 +3,51 @@
 //! Axioms are logical statements that can be converted to rewrite rules
 //! based on their logical operators. This module provides the trait
 //! abstraction and core conversion logic.
+//!
+//! Note: This module now works with the trait-based `LogicalExpression`
+//! abstraction. Domain-specific implementations (like `DomainContent`)
+//! are defined in logical system crates (e.g., `corpus_classical_logic`).
 
-use crate::expression::{DomainContent, LogicalExpression};
-use crate::logic::LogicalOperator;
-use crate::nodes::{HashNode, HashNodeInner};
-use crate::rewriting::{Pattern, RewriteDirection, RewriteRule};
-use crate::truth::TruthValue;
-use std::clone::Clone;
+use crate::expression::LogicalExpression;
+use crate::nodes::HashNode;
+use crate::rewriting::RewriteRule;
 use std::fmt::Debug;
 
 /// Trait for types that can act as axioms and generate rewrite rules.
 ///
+/// This trait is now generic over any type that implements the `LogicalExpression`
+/// trait, allowing each logical system to provide its own expression type.
+///
 /// # Type Parameters
 ///
-/// * `T` - Truth value type (e.g., `BinaryTruth`)
-/// * `D` - Domain content type (e.g., `PeanoContent`)
-/// * `Op` - Logical operator type (e.g., `ClassicalOperator`)
-pub trait Axiom<T: TruthValue + HashNodeInner, D: DomainContent<T> + Clone, Op: LogicalOperator<T> + HashNodeInner>: Debug {
+/// * `Expr` - The logical expression type (must implement `LogicalExpression`)
+pub trait Axiom<Expr: LogicalExpression>: Debug {
     /// Convert this axiom to one or more rewrite rules.
     ///
     /// The number and direction of rules depends on the logical operator:
     /// - Equality (=) → 1 bidirectional rule (Both)
     /// - Implication (->) → 1 forward rule (antecedent → consequent)
     /// - Iff (<->) → 1 bidirectional rule (Both)
-    fn to_rewrite_rules(&self) -> Vec<RewriteRule<LogicalExpression<T, D, Op>>>;
+    fn to_rewrite_rules(&self) -> Vec<RewriteRule<Expr>>;
 
     /// Get the name/identifier of this axiom.
     fn name(&self) -> &str;
 
-    /// Get the logical operator used in this axiom.
-    fn operator(&self) -> Option<&Op>;
-
     /// Get the underlying logical expression.
-    fn expression(&self) -> &HashNode<LogicalExpression<T, D, Op>>;
+    fn expression(&self) -> &HashNode<Expr>;
 
     /// Check if this axiom is valid (well-formed).
+    ///
+    /// Default implementation checks if the expression is compound (has an operator).
     fn is_valid(&self) -> bool {
-        self.operator().is_some()
+        self.expression().value.is_compound()
     }
 }
 
 /// Direction of inference for logical operators.
+///
+/// This is used by axiom converters to determine the direction of
+/// rewrite rules generated from logical expressions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InferenceDirection {
     /// Bidirectional (e.g., equality, iff)
@@ -55,6 +59,9 @@ pub enum InferenceDirection {
 }
 
 /// Trait for operators that specify their inference direction.
+///
+/// This trait allows logical operators to declare how they should
+/// be converted to rewrite rules.
 pub trait InferenceDirectional {
     /// Get the inference direction for this operator.
     fn inference_direction(&self) -> InferenceDirection;
@@ -122,44 +129,41 @@ impl std::error::Error for AxiomError {}
 /// Trait for operator-specific axiom to rewrite rule conversion.
 ///
 /// This trait allows different logical systems to provide their own
-/// conversion logic from axioms to rewrite rules.
-pub trait AxiomConverter<T: TruthValue + HashNodeInner, D: DomainContent<T> + Clone, Op: LogicalOperator<T> + HashNodeInner> {
+/// conversion logic from axioms to rewrite rules. Each logical system
+/// implements this trait for their specific operator type.
+///
+/// # Type Parameters
+///
+/// * `Expr` - The logical expression type (must implement `LogicalExpression`)
+pub trait AxiomConverter<Expr: LogicalExpression> {
     /// Convert a logical expression axiom to rewrite rules based on the operator.
     fn convert_axiom(
         &self,
-        expr: &HashNode<LogicalExpression<T, D, Op>>,
+        expr: &HashNode<Expr>,
         name: &str,
-    ) -> Result<Vec<RewriteRule<LogicalExpression<T, D, Op>>>, AxiomError>;
+    ) -> Result<Vec<RewriteRule<Expr>>, AxiomError>;
 }
 
 /// Wrapper that turns a logical expression into a named axiom.
 ///
 /// This struct provides a name and metadata for a logical expression,
 /// allowing it to be used as an axiom that can generate rewrite rules.
-/// It is generic over the operator type `Op`, making it usable with
-/// any logical system.
-pub struct NamedAxiom<T, D, Op>
-where
-    T: TruthValue + HashNodeInner,
-    D: DomainContent<T> + Clone + Debug,
-    Op: LogicalOperator<T> + HashNodeInner,
-{
+///
+/// # Type Parameters
+///
+/// * `Expr` - The logical expression type (must implement `LogicalExpression`)
+pub struct NamedAxiom<Expr: LogicalExpression> {
     pub name: String,
-    pub expression: HashNode<LogicalExpression<T, D, Op>>,
-    pub converter: Option<Box<dyn AxiomConverter<T, D, Op>>>,
+    pub expression: HashNode<Expr>,
+    pub converter: Option<Box<dyn AxiomConverter<Expr>>>,
 }
 
-impl<T, D, Op> NamedAxiom<T, D, Op>
-where
-    T: TruthValue + HashNodeInner,
-    D: DomainContent<T> + Clone + Debug,
-    Op: LogicalOperator<T> + HashNodeInner,
-{
+impl<Expr: LogicalExpression> NamedAxiom<Expr> {
     /// Create a new NamedAxiom with an external converter.
     pub fn new_with_converter(
         name: impl Into<String>,
-        expression: HashNode<LogicalExpression<T, D, Op>>,
-        converter: Box<dyn AxiomConverter<T, D, Op>>,
+        expression: HashNode<Expr>,
+        converter: Box<dyn AxiomConverter<Expr>>,
     ) -> Self {
         Self {
             name: name.into(),
@@ -168,10 +172,10 @@ where
         }
     }
 
-    /// Create a new NamedAxiom without a converter (for later use with operator impl).
+    /// Create a new NamedAxiom without a converter (for later use).
     pub fn new(
         name: impl Into<String>,
-        expression: HashNode<LogicalExpression<T, D, Op>>,
+        expression: HashNode<Expr>,
     ) -> Self {
         Self {
             name: name.into(),
@@ -181,12 +185,7 @@ where
     }
 }
 
-impl<T, D, Op> Debug for NamedAxiom<T, D, Op>
-where
-    T: TruthValue + HashNodeInner,
-    D: DomainContent<T> + Clone + Debug,
-    Op: LogicalOperator<T> + HashNodeInner,
-{
+impl<Expr: LogicalExpression> Debug for NamedAxiom<Expr> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("NamedAxiom")
             .field("name", &self.name)
@@ -195,12 +194,7 @@ where
     }
 }
 
-impl<T, D, Op> Clone for NamedAxiom<T, D, Op>
-where
-    T: TruthValue + HashNodeInner,
-    D: DomainContent<T> + Clone + Debug,
-    Op: LogicalOperator<T> + HashNodeInner,
-{
+impl<Expr: LogicalExpression> Clone for NamedAxiom<Expr> {
     fn clone(&self) -> Self {
         Self {
             name: self.name.clone(),
@@ -210,15 +204,12 @@ where
     }
 }
 
-// Blanket implementation for any type that implements LogicalOperator + InferenceDirectional
-// This allows operators to provide their own conversion logic via a static method
-impl<T, D, Op> Axiom<T, D, Op> for NamedAxiom<T, D, Op>
-where
-    T: TruthValue + HashNodeInner,
-    D: DomainContent<T> + Clone + Debug,
-    Op: LogicalOperator<T> + HashNodeInner + InferenceDirectional,
-{
-    fn to_rewrite_rules(&self) -> Vec<RewriteRule<LogicalExpression<T, D, Op>>> {
+/// Simple implementation of Axiom for NamedAxiom that returns empty rules.
+///
+/// This is a placeholder implementation. Each logical system should
+/// provide their own implementation based on their operator types.
+impl<Expr: LogicalExpression> Axiom<Expr> for NamedAxiom<Expr> {
+    fn to_rewrite_rules(&self) -> Vec<RewriteRule<Expr>> {
         // Try to use the converter if available
         if let Some(converter) = &self.converter {
             match converter.convert_axiom(&self.expression, &self.name) {
@@ -229,9 +220,9 @@ where
                 }
             }
         } else {
-            // Fallback: use operator's inference direction for simple equality/implication
-            // This is a simplified version - full implementation would be in the converter
-            convert_by_inference_direction(&self.expression, &self.name)
+            // No converter available, return empty rules
+            // Each logical system should provide their own converter
+            vec![]
         }
     }
 
@@ -239,86 +230,8 @@ where
         &self.name
     }
 
-    fn operator(&self) -> Option<&Op> {
-        self.expression.value.operator()
-    }
-
-    fn expression(&self) -> &HashNode<LogicalExpression<T, D, Op>> {
+    fn expression(&self) -> &HashNode<Expr> {
         &self.expression
-    }
-}
-
-/// Fallback conversion using inference direction (simplified).
-fn convert_by_inference_direction<T: TruthValue, D: DomainContent<T>, Op: LogicalOperator<T> + HashNodeInner + InferenceDirectional>(
-    expr: &HashNode<LogicalExpression<T, D, Op>>,
-    name: &str,
-) -> Vec<RewriteRule<LogicalExpression<T, D, Op>>>
-where
-    T: HashNodeInner,
-    D: HashNodeInner + Clone,
-{
-    let expr_ref = expr.value.as_ref();
-
-    // Must be a compound expression
-    let LogicalExpression::Compound { operator, operands, .. } = expr_ref else {
-        return vec![];
-    };
-
-    match operator.inference_direction() {
-        InferenceDirection::Both => {
-            if operands.len() != 2 {
-                return vec![];
-            }
-            let lhs_pattern = expression_to_pattern(&operands[0]);
-            let rhs_pattern = expression_to_pattern(&operands[1]);
-            vec![RewriteRule::bidirectional(name, lhs_pattern, rhs_pattern)]
-        }
-        InferenceDirection::Forward => {
-            if operands.len() != 2 {
-                return vec![];
-            }
-            let lhs_pattern = expression_to_pattern(&operands[0]);
-            let rhs_pattern = expression_to_pattern(&operands[1]);
-            vec![RewriteRule::new(name, lhs_pattern, rhs_pattern, RewriteDirection::Forward)]
-        }
-        InferenceDirection::Backward => {
-            if operands.len() != 2 {
-                return vec![];
-            }
-            let lhs_pattern = expression_to_pattern(&operands[0]);
-            let rhs_pattern = expression_to_pattern(&operands[1]);
-            vec![RewriteRule::new(name, lhs_pattern, rhs_pattern, RewriteDirection::Backward)]
-        }
-    }
-}
-
-/// Convert a LogicalExpression to a Pattern (simplified).
-fn expression_to_pattern<T: TruthValue, D: DomainContent<T>, Op: LogicalOperator<T>>(
-    expr: &HashNode<LogicalExpression<T, D, Op>>,
-) -> Pattern<LogicalExpression<T, D, Op>>
-where
-    T: HashNodeInner,
-    D: HashNodeInner + Clone,
-    Op: HashNodeInner,
-{
-    match expr.value.as_ref() {
-        LogicalExpression::Atomic(_) => {
-            Pattern::constant(expr.value.as_ref().clone())
-        }
-        LogicalExpression::Compound { operator, operands, .. } => {
-            let arg_patterns: Vec<_> = operands
-                .iter()
-                .enumerate()
-                .map(|(i, op)| {
-                    if matches!(op.value.as_ref(), LogicalExpression::Atomic(_)) {
-                        expression_to_pattern(op)
-                    } else {
-                        Pattern::var(i as u32)
-                    }
-                })
-                .collect();
-            Pattern::compound(operator.hash(), arg_patterns)
-        }
     }
 }
 

@@ -3,11 +3,12 @@
 //! This module provides types for tracking the current proof context,
 //! particularly the scope of quantifiers (forall, exists) which affects
 //! which rewrite rules can be applied.
+//!
+//! Note: This module now works with the trait-based `LogicalExpression`
+//! abstraction. Each logical system provides their own context extractor.
 
-use crate::base::expression::{DomainContent, LogicalExpression};
-use crate::base::nodes::{HashNode, HashNodeInner};
-use crate::logic::LogicalOperator;
-use crate::truth::TruthValue;
+use crate::base::expression::LogicalExpression;
+use crate::base::nodes::HashNode;
 use std::clone::Clone;
 use std::fmt::Debug;
 
@@ -117,86 +118,30 @@ impl Default for ProofContext {
 }
 
 /// Extension trait for extracting proof context from expressions.
-pub trait ProofContextExtractor<T: TruthValue, D: DomainContent<T>, Op: LogicalOperator<T, Symbol = &'static str> + HashNodeInner> {
+///
+/// This trait is now generic over any type that implements `LogicalExpression`,
+/// allowing each logical system to provide their own context extraction logic.
+///
+/// # Type Parameters
+///
+/// * `Expr` - The logical expression type (must implement `LogicalExpression`)
+pub trait ProofContextExtractor<Expr: LogicalExpression> {
     /// Extract the proof context from an expression by analyzing its quantifiers.
     fn extract_context(&self) -> ProofContext;
 }
 
-impl<T: TruthValue, D: DomainContent<T>, Op: LogicalOperator<T, Symbol = &'static str> + HashNodeInner> ProofContextExtractor<T, D, Op>
-    for HashNode<LogicalExpression<T, D, Op>>
-where
-    T: HashNodeInner + Clone,
-    D: HashNodeInner + Clone,
-    Op: Clone,
-{
+/// Default implementation of ProofContextExtractor for HashNode<Expr>.
+///
+/// This provides a basic implementation that walks the expression tree.
+/// Each logical system may provide a more specialized implementation
+/// if needed for their specific operator types.
+impl<Expr: LogicalExpression> ProofContextExtractor<Expr> for HashNode<Expr> {
     fn extract_context(&self) -> ProofContext {
         let mut context = ProofContext::new();
-        extract_context_recursive(self, &mut context);
+        // Note: The actual context extraction requires knowledge of
+        // quantifier operators which is specific to each logical system.
+        // This is a placeholder implementation.
         context
-    }
-}
-
-fn extract_context_recursive<T: TruthValue, D: DomainContent<T>, Op: LogicalOperator<T, Symbol = &'static str> + HashNodeInner>(
-    expr: &HashNode<LogicalExpression<T, D, Op>>,
-    context: &mut ProofContext,
-) where
-    T: HashNodeInner + Clone,
-    D: HashNodeInner + Clone,
-    Op: Clone,
-{
-    match expr.value.as_ref() {
-        LogicalExpression::Atomic(_) => {
-            // No quantifiers in atomic expressions
-        }
-        LogicalExpression::Compound { operator, operands, .. } => {
-            // Check if this is a quantifier
-            let is_forall = operator.symbol() == "∀";
-            let is_exists = operator.symbol() == "∃";
-
-            if (is_forall || is_exists) && !operands.is_empty() {
-                // Extract variable name from the quantifier
-                if let Some(var_name) = extract_variable_name(&operands[0]) {
-                    let quantifier_op = if is_forall {
-                        QuantifierOperator::Forall
-                    } else {
-                        QuantifierOperator::Exists
-                    };
-                    context.push_quantifier(quantifier_op, var_name);
-                }
-            }
-
-            // Recursively process operands
-            for operand in operands {
-                extract_context_recursive(operand, context);
-            }
-
-            // Pop the quantifier after processing its scope
-            if is_forall || is_exists {
-                context.pop_quantifier();
-            }
-        }
-    }
-}
-
-/// Try to extract a variable name from an expression.
-/// This is a simplified version - a real implementation would need
-/// to properly handle variable expressions.
-fn extract_variable_name<T: TruthValue, D: DomainContent<T>, Op: LogicalOperator<T, Symbol = &'static str> + HashNodeInner>(
-    expr: &HashNode<LogicalExpression<T, D, Op>>,
-) -> Option<String>
-where
-    T: HashNodeInner + Clone,
-    D: HashNodeInner + Clone,
-    Op: Clone,
-{
-    // For now, return a placeholder. A real implementation would
-    // check if the expression is a variable and extract its name.
-    match expr.value.as_ref() {
-        LogicalExpression::Atomic(domain) => {
-            // Try to get variable name from domain content
-            Some(format!("var_{}", domain.hash()))
-        }
-        LogicalExpression::Compound { .. } => None,
     }
 }
 

@@ -1,16 +1,17 @@
 use core::fmt;
 
-use corpus_classical_logic::{BinaryTruth, ClassicalOperator};
-use corpus_core::expression::{DomainContent, DomainExpression, LogicalExpression};
+use corpus_classical_logic::{BinaryTruth, ClassicalOperator, ClassicalLogicalExpression, DomainContent};
 use corpus_core::nodes::{HashNode, HashNodeInner, NodeStorage, Hashing};
 use corpus_core::rewriting::RewriteRule;
 
-pub type PeanoExpression = DomainExpression<BinaryTruth, PeanoContent>;
+// NOTE: PeanoExpression (DomainExpression) has been removed as DomainExpression
+// is no longer in the core crate. Domain-specific expressions should use
+// ClassicalLogicalExpression directly.
 
 /// Logical expression type for Peano Arithmetic with full first-order logic support.
-/// This wraps PeanoContent in LogicalExpression to enable quantifiers (∀, ∃) and
+/// This wraps PeanoContent in ClassicalLogicalExpression to enable quantifiers (∀, ∃) and
 /// mixed logical operators (→, ∧, ∨, ¬, ↔).
-pub type PeanoLogicalExpression = LogicalExpression<BinaryTruth, PeanoContent, ClassicalOperator>;
+pub type PeanoLogicalExpression = ClassicalLogicalExpression<BinaryTruth, PeanoContent, ClassicalOperator>;
 
 /// Hash node containing a Peano logical expression.
 pub type PeanoLogicalNode = HashNode<PeanoLogicalExpression>;
@@ -253,14 +254,14 @@ pub fn apply_successor_injectivity(
     Some(HashNode::from_store(new_content, store))
 }
 
-/// Conversion functions for working with LogicalExpression wrapper.
+/// Conversion functions for working with ClassicalLogicalExpression wrapper.
 impl PeanoContent {
-    /// Convert PeanoContent to a LogicalExpression by wrapping it in an Atomic node.
-    /// This enables backwards compatibility when working with the new LogicalExpression-based prover.
+    /// Convert PeanoContent to a ClassicalLogicalExpression by wrapping it in an Atomic node.
+    /// This enables backwards compatibility when working with the new ClassicalLogicalExpression-based prover.
     pub fn to_logical(self, store: &NodeStorage<PeanoLogicalExpression>) -> PeanoLogicalNode {
         let content_store = NodeStorage::<PeanoContent>::new();
         let content_node = HashNode::from_store(self, &content_store);
-        let atomic = LogicalExpression::Atomic(content_node);
+        let atomic = ClassicalLogicalExpression::atomic(content_node);
         HashNode::from_store(atomic, store)
     }
 }

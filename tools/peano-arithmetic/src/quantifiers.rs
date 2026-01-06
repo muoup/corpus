@@ -1,11 +1,10 @@
 //! Utilities for working with quantified expressions in Peano Arithmetic.
 //!
-//! This module provides helper functions for manipulating LogicalExpressions
+//! This module provides helper functions for manipulating ClassicalLogicalExpressions
 //! that contain quantifiers (∀, ∃), ensuring that quantifier structure is
 //! preserved during rewrite operations.
 
-use corpus_classical_logic::ClassicalOperator;
-use corpus_core::expression::LogicalExpression;
+use corpus_classical_logic::{ClassicalLogicalExpression, ClassicalOperator};
 use corpus_core::nodes::{HashNode, NodeStorage};
 
 use crate::syntax::PeanoLogicalExpression;
@@ -44,7 +43,7 @@ where
 {
     match expr.value.as_ref() {
         // For quantified expressions, recurse into the body
-        LogicalExpression::Compound { operator, operands, .. }
+        ClassicalLogicalExpression::Compound { operator, operands, .. }
             if operator.symbol() == "∀" || operator.symbol() == "∃" =>
         {
             if let Some(body) = operands.first() {
@@ -52,11 +51,10 @@ where
                 let new_body = apply_under_quantifiers(body, store, f)?;
 
                 // Re-wrap with the quantifier
-                let new_expr = LogicalExpression::Compound {
-                    operator: operator.clone(),
-                    operands: vec![new_body],
-                    _phantom: std::marker::PhantomData,
-                };
+                let new_expr = ClassicalLogicalExpression::compound(
+                    operator.clone(),
+                    vec![new_body],
+                );
                 Some(HashNode::from_store(new_expr, store))
             } else {
                 None
@@ -79,11 +77,10 @@ pub fn wrap_in_quantifier(
     body: PeanoLogicalNode,
     store: &NodeStorage<PeanoLogicalExpression>,
 ) -> PeanoLogicalNode {
-    let expr = LogicalExpression::Compound {
+    let expr = ClassicalLogicalExpression::compound(
         operator,
-        operands: vec![body],
-        _phantom: std::marker::PhantomData,
-    };
+        vec![body],
+    );
     HashNode::from_store(expr, store)
 }
 
@@ -98,7 +95,7 @@ pub fn wrap_in_quantifier(
 /// ```
 pub fn count_outer_quantifiers(expr: &PeanoLogicalNode) -> usize {
     match expr.value.as_ref() {
-        LogicalExpression::Compound { operator, operands, .. }
+        ClassicalLogicalExpression::Compound { operator, operands, .. }
             if operator.symbol() == "∀" || operator.symbol() == "∃" =>
         {
             if let Some(body) = operands.first() {
@@ -127,7 +124,7 @@ pub fn strip_quantifiers(
 
     loop {
         match current.value.as_ref() {
-            LogicalExpression::Compound { operator, operands, .. }
+            ClassicalLogicalExpression::Compound { operator, operands, .. }
                 if operator.symbol() == "∀" || operator.symbol() == "∃" =>
             {
                 quantifiers.push(operator.clone());

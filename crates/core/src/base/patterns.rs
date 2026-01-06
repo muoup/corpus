@@ -2,12 +2,13 @@
 //!
 //! This trait provides a generic interface for converting logical expressions
 //! (potentially with quantifiers) into pattern matching structures.
+//!
+//! Note: This module now works with the trait-based `LogicalExpression`
+//! abstraction. Each logical system provides their own decomposer implementation.
 
 use crate::expression::LogicalExpression;
-use crate::logic::LogicalOperator;
 use crate::nodes::{HashNode, NodeStorage};
 use crate::rewriting::Pattern;
-use crate::truth::TruthValue;
 use std::collections::HashSet;
 
 /// Trait for converting expressions with quantifiers into patterns.
@@ -16,32 +17,31 @@ use std::collections::HashSet;
 /// quantifiers (∀, ∃) into pattern matching structures. Quantifiers introduce
 /// variable bindings that need to be tracked during the conversion.
 ///
+/// This trait is now generic over any type that implements `LogicalExpression`,
+/// allowing each logical system to provide their own decomposer implementation.
+///
 /// # Type Parameters
 ///
-/// * `T` - The truth value type (e.g., `BinaryTruth`)
-/// * `D` - The domain content type (e.g., `PeanoContent`)
-/// * `Op` - The logical operator type (e.g., `ClassicalOperator`)
+/// * `Expr` - The logical expression type (must implement `LogicalExpression`)
 ///
 /// # Example
 ///
 /// ```rust,ignore
 /// use corpus_core::patterns::PatternDecomposer;
-/// use corpus_classical_logic::ClassicalOperator;
+/// use corpus_classical_logic::ClassicalLogicalExpression;
 ///
 /// struct PeanoPatternDecomposer;
 ///
-/// impl PatternDecomposer<BinaryTruth, PeanoContent, ClassicalOperator> for PeanoPatternDecomposer {
-///     fn expression_to_pattern(&self, expr: &HashNode<LogicalExpression<...>>, store: &...) -> Pattern<...> {
+/// impl PatternDecomposer<ClassicalLogicalExpression<BinaryTruth, PeanoContent, ClassicalOperator>>
+///     for PeanoPatternDecomposer
+/// {
+///     fn expression_to_pattern(&self, expr: &HashNode<Expr>, store: &...) -> Pattern<Expr> {
 ///         // Convert expression to pattern, handling quantifiers
 ///         todo!()
 ///     }
 /// }
 /// ```
-pub trait PatternDecomposer<T: TruthValue, D: crate::expression::DomainContent<T> + Clone, Op: LogicalOperator<T>>
-where
-    T: crate::nodes::HashNodeInner,
-    Op: crate::nodes::HashNodeInner,
-{
+pub trait PatternDecomposer<Expr: LogicalExpression> {
     /// Convert a logical expression to a pattern, handling quantifiers.
     ///
     /// This function walks the expression tree and converts it to a pattern.
@@ -59,9 +59,9 @@ where
     /// variables in place of quantified bindings.
     fn expression_to_pattern(
         &self,
-        expr: &HashNode<LogicalExpression<T, D, Op>>,
-        store: &NodeStorage<LogicalExpression<T, D, Op>>,
-    ) -> Pattern<LogicalExpression<T, D, Op>>;
+        expr: &HashNode<Expr>,
+        store: &NodeStorage<Expr>,
+    ) -> Pattern<Expr>;
 
     /// Extract variable bindings from quantified expressions.
     ///
@@ -71,7 +71,7 @@ where
     /// For example, `∀x.∃y.(x = y)` would return `[0, 1]` (x is bound at depth 0, y at depth 1).
     fn extract_quantified_variables(
         &self,
-        expr: &HashNode<LogicalExpression<T, D, Op>>,
+        expr: &HashNode<Expr>,
     ) -> Vec<u32>;
 
     /// Get the binding depth of a variable occurrence.
@@ -86,7 +86,7 @@ where
     /// - The occurrence of `y` has depth 1 (bound by the inner quantifier)
     fn variable_depth(
         &self,
-        expr: &HashNode<LogicalExpression<T, D, Op>>,
+        expr: &HashNode<Expr>,
         var_index: u32,
     ) -> Option<u32>;
 
@@ -95,11 +95,11 @@ where
     /// Free variables are those that are not bound by any quantifier in the
     /// given expression. Returns a set of variable indices.
     ///
-    /// The default implementation uses `extract_quantified_variables` and
-    /// assumes variables are represented as de Bruijn indices >= the quantifier depth.
+    /// The default implementation assumes all variables are bound.
+    /// Subtraits should override this for their specific representation.
     fn free_variables(
         &self,
-        _expr: &HashNode<LogicalExpression<T, D, Op>>,
+        _expr: &HashNode<Expr>,
     ) -> HashSet<u32> {
         // Default implementation assumes all variables are bound
         // Subtraits should override this for their specific representation

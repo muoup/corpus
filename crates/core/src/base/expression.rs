@@ -1,218 +1,45 @@
-use crate::logic::LogicalOperator;
-use crate::nodes::{HashNode, HashNodeInner, Hashing, NodeStorage};
+use crate::nodes::HashNodeInner;
 use crate::truth::TruthValue;
-use std::fmt::{Display, Formatter};
-use std::marker::PhantomData;
+use std::fmt::{Debug, Display};
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum LogicalExpression<T: TruthValue, D: DomainContent<T>, Op: LogicalOperator<T>>
+/// Trait for logical expressions that can be used with generic proving/rewriting systems.
+///
+/// Each logical system (classical, intuitionistic, etc.) implements this trait
+/// for their concrete expression type. Uses opcode-based deconstruction similar
+/// to `HashNodeInner` for generic operations.
+///
+/// # Type Parameters
+///
+/// * `TruthValue` - The truth value type for this logical system (e.g., `BinaryTruth`)
+pub trait LogicalExpression: HashNodeInner + Clone + Debug + Display
 where
-    T: HashNodeInner,
-    Op: HashNodeInner,
+    Self: Sized,
 {
-    Atomic(HashNode<D>),
-    Compound {
-        operator: Op,
-        operands: Vec<HashNode<Self>>,
+    /// The truth value type for this logical system (e.g., BinaryTruth)
+    type TruthValue: TruthValue;
 
-        _phantom: std::marker::PhantomData<T>,
-    },
+    /// Check if this is an atomic (leaf) expression
+    fn is_atomic(&self) -> bool {
+        self.decompose().is_none()
+    }
+
+    /// Check if this is a compound expression with an operator
+    fn is_compound(&self) -> bool {
+        !self.is_atomic()
+    }
+
+    /// Get the opcode if this is a compound expression (for pattern matching)
+    fn opcode(&self) -> Option<u64> {
+        self.decompose().map(|(op, _)| op)
+    }
+
+    /// Get the arity (number of operands) if compound
+    fn arity(&self) -> Option<usize> {
+        self.decompose().map(|(_, children)| children.len())
+    }
+
+    // Note: decompose() and construct_from_parts() are inherited from HashNodeInner
 }
-
-impl<T: TruthValue, D: DomainContent<T>, Op: LogicalOperator<T>> LogicalExpression<T, D, Op>
-where
-    T: HashNodeInner,
-    Op: HashNodeInner,
-{
-    pub fn atomic(value: HashNode<D>) -> Self {
-        LogicalExpression::Atomic(value)
-    }
-
-    pub fn compound(operator: Op, operands: Vec<HashNode<Self>>) -> Self {
-        LogicalExpression::Compound {
-            operator,
-            operands,
-            _phantom: PhantomData,
-        }
-    }
-
-    pub fn is_atomic(&self) -> bool {
-        matches!(self, LogicalExpression::Atomic(_))
-    }
-
-    pub fn is_compound(&self) -> bool {
-        matches!(self, LogicalExpression::Compound { .. })
-    }
-
-    pub fn operator(&self) -> Option<&Op> {
-        match self {
-            LogicalExpression::Compound { operator, .. } => Some(operator),
-            _ => None,
-        }
-    }
-
-    pub fn operands(&self) -> Option<&Vec<HashNode<Self>>> {
-        match self {
-            LogicalExpression::Compound { operands, .. } => Some(operands),
-            _ => None,
-        }
-    }
-}
-
-impl<T: TruthValue, D: DomainContent<T>, Op: LogicalOperator<T>> Display
-    for LogicalExpression<T, D, Op>
-where
-    D: Display + HashNodeInner,
-    T: Display + HashNodeInner,
-    Op: Display + HashNodeInner,
-{
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LogicalExpression::Atomic(value) => write!(f, "{}", value),
-            LogicalExpression::Compound {
-                operator, operands, ..
-            } => match operator.arity() {
-                1 => write!(f, "({} {})", operator, &operands[0]),
-                2 => write!(f, "({} {} {})", &operands[0], operator, &operands[1]),
-                _ => write!(
-                    f,
-                    "({} {})",
-                    operator,
-                    operands
-                        .iter()
-                        .map(|op| format!("{}", op))
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                ),
-            },
-        }
-    }
-}
-
-impl<T: TruthValue, D: DomainContent<T>, Op: LogicalOperator<T>> HashNodeInner
-    for LogicalExpression<T, D, Op>
-where
-    T: HashNodeInner,
-    Op: HashNodeInner,
-{
-    fn hash(&self) -> u64 {
-        match self {
-            LogicalExpression::Atomic(value) => Hashing::root_hash(0, &[value.hash()]),
-            LogicalExpression::Compound {
-                operator, operands, ..
-            } => {
-                let mut all_hashes = vec![operator.hash()];
-                all_hashes.extend(operands.iter().map(|node| node.hash()));
-                Hashing::root_hash(1, &all_hashes)
-            }
-        }
-    }
-
-    fn size(&self) -> u64 {
-        match self {
-            LogicalExpression::Atomic(value) => 1 + value.size(),
-            LogicalExpression::Compound {
-                operator, operands, ..
-            } => 1 + operator.size() + operands.iter().map(|node| node.size()).sum::<u64>(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum DomainExpression<T: TruthValue, D: DomainContent<T>>
-where
-    T: HashNodeInner,
-    D: HashNodeInner,
-{
-    Domain(HashNode<D>),
-    Logical(HashNode<LogicalExpression<T, D, D::Operator>>),
-}
-
-impl<T: TruthValue, D: DomainContent<T>> DomainExpression<T, D>
-where
-    T: HashNodeInner,
-    D: HashNodeInner,
-{
-    pub fn domain(content: HashNode<D>) -> Self {
-        DomainExpression::Domain(content)
-    }
-
-    pub fn logical(expr: HashNode<LogicalExpression<T, D, D::Operator>>) -> Self {
-        DomainExpression::Logical(expr)
-    }
-
-    pub fn is_domain(&self) -> bool {
-        matches!(self, DomainExpression::Domain(_))
-    }
-
-    pub fn is_logical(&self) -> bool {
-        matches!(self, DomainExpression::Logical(_))
-    }
-
-    pub fn as_domain(&self) -> Option<&HashNode<D>> {
-        match self {
-            DomainExpression::Domain(content) => Some(content),
-            _ => None,
-        }
-    }
-
-    pub fn as_logical(
-        &self,
-        storage: &NodeStorage<LogicalExpression<T, D, D::Operator>>,
-    ) -> HashNode<LogicalExpression<T, D, D::Operator>> {
-        match self {
-            DomainExpression::Logical(expr) => expr.clone(),
-            DomainExpression::Domain(domain) => {
-                HashNode::from_store(LogicalExpression::atomic(domain.clone()), storage)
-            }
-        }
-    }
-}
-
-pub trait DomainContent<T: TruthValue>
-where
-    Self: HashNodeInner,
-    Self::Operator: HashNodeInner,
-{
-    type Operator: LogicalOperator<T>;
-}
-
-impl<T: TruthValue, D: DomainContent<T>> HashNodeInner for DomainExpression<T, D>
-where
-    T: HashNodeInner,
-    D: HashNodeInner,
-    D::Operator: HashNodeInner,
-{
-    fn hash(&self) -> u64 {
-        match self {
-            DomainExpression::Domain(content) => Hashing::root_hash(0, &[content.hash()]),
-            DomainExpression::Logical(expr) => Hashing::root_hash(1, &[expr.hash()]),
-        }
-    }
-
-    fn size(&self) -> u64 {
-        match self {
-            DomainExpression::Domain(content) => 1 + content.size(),
-            DomainExpression::Logical(expr) => 1 + expr.size(),
-        }
-    }
-}
-
-impl<T: TruthValue, D: DomainContent<T>> Display for DomainExpression<T, D>
-where
-    T: Display + HashNodeInner,
-    D: Display + HashNodeInner,
-    D::Operator: Display + HashNodeInner,
-{
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DomainExpression::Domain(content) => write!(f, "{}", content),
-            DomainExpression::Logical(expr) => write!(f, "{}", expr),
-        }
-    }
-}
-
-// NOTE: Cross-level rewrite rules for DomainExpression are not implemented via
-// the generic Unifiable trait due to type system limitations. Instead, use
-// specialized rewrite functions like apply_successor_injectivity in the
-// domain-specific modules (e.g., tools/peano-arithmetic/src/syntax.rs).
+// NOTE: DomainExpression and DomainContent have been removed from core.
+// These are now implementation-specific, defined in crates like classical-logic.
+// This removes the coupling between the core crate and domain-specific concepts.

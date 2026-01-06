@@ -1,10 +1,9 @@
 use std::{iter::Peekable, str::Chars};
 
-use corpus_classical_logic::{BinaryTruth, ClassicalOperator};
-use corpus_core::expression::LogicalExpression;
+use corpus_classical_logic::{BinaryTruth, ClassicalOperator, ClassicalLogicalExpression};
 use corpus_core::nodes::{HashNode, NodeStorage};
 
-use crate::syntax::{ArithmeticExpression, PeanoContent, PeanoExpression};
+use crate::syntax::{ArithmeticExpression, PeanoContent, PeanoLogicalExpression};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
@@ -163,18 +162,16 @@ impl<'a> Iterator for Lexer<'a> {
 
 pub struct Parser<'a> {
     tokens: Peekable<Lexer<'a>>,
-    
-    pub peano_store: NodeStorage<PeanoExpression>,
+
     pub expression_store: NodeStorage<ArithmeticExpression>,
     pub content_store: NodeStorage<PeanoContent>,
-    pub logical_store: NodeStorage<LogicalExpression<BinaryTruth, PeanoContent, ClassicalOperator>>,
+    pub logical_store: NodeStorage<PeanoLogicalExpression>,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(input: &'a str) -> Self {
         Self {
             tokens: Lexer::new(input).peekable(),
-            peano_store: NodeStorage::new(),
             expression_store: NodeStorage::new(),
             content_store: NodeStorage::new(),
             logical_store: NodeStorage::new(),
@@ -202,7 +199,7 @@ impl<'a> Parser<'a> {
         Ok(result)
     }
 
-    pub fn parse_proposition(&mut self) -> Result<HashNode<PeanoExpression>, String> {
+    pub fn parse_proposition(&mut self) -> Result<HashNode<PeanoLogicalExpression>, String> {
         let token = self
             .tokens
             .next()
@@ -211,81 +208,76 @@ impl<'a> Parser<'a> {
             Token::And => {
                 let left = self.parse_parenthesized(Self::parse_proposition)?;
                 let right = self.parse_parenthesized(Self::parse_proposition)?;
-                let logical_expr = LogicalExpression::compound(
+                let logical_expr = ClassicalLogicalExpression::compound(
                     ClassicalOperator::And,
                     vec![
-                        left.value.as_logical(&self.logical_store),
-                        right.value.as_logical(&self.logical_store),
+                        left,
+                        right,
                     ],
                 );
                 let logical_node = HashNode::from_store(logical_expr, &self.logical_store);
-                let peano_expr = PeanoExpression::logical(logical_node);
-                Ok(HashNode::from_store(peano_expr, &self.peano_store))
+                Ok(logical_node)
             }
             Token::Or => {
                 let left = self.parse_parenthesized(Self::parse_proposition)?;
                 let right = self.parse_parenthesized(Self::parse_proposition)?;
-                let logical_expr = LogicalExpression::compound(
+                let logical_expr = ClassicalLogicalExpression::compound(
                     ClassicalOperator::Or,
                     vec![
-                        left.value.as_logical(&self.logical_store),
-                        right.value.as_logical(&self.logical_store),
+                        left,
+                        right,
                     ],
                 );
                 let logical_node = HashNode::from_store(logical_expr, &self.logical_store);
-                let peano_expr = PeanoExpression::logical(logical_node);
-                Ok(HashNode::from_store(peano_expr, &self.peano_store))
+                Ok(logical_node)
             }
             Token::Implies => {
                 let left = self.parse_parenthesized(Self::parse_proposition)?;
                 let right = self.parse_parenthesized(Self::parse_proposition)?;
-                let logical_expr = LogicalExpression::compound(
+                let logical_expr = ClassicalLogicalExpression::compound(
                     ClassicalOperator::Implies,
                     vec![
-                        left.value.as_logical(&self.logical_store),
-                        right.value.as_logical(&self.logical_store),
+                        left,
+                        right,
                     ],
                 );
                 let logical_node = HashNode::from_store(logical_expr, &self.logical_store);
-                let peano_expr = PeanoExpression::logical(logical_node);
-                Ok(HashNode::from_store(peano_expr, &self.peano_store))
+                Ok(logical_node)
             }
             Token::Not => {
                 let inner = self.parse_parenthesized(Self::parse_proposition)?;
-                let logical_expr = LogicalExpression::compound(
+                let logical_expr = ClassicalLogicalExpression::compound(
                     ClassicalOperator::Not,
-                    vec![inner.value.as_logical(&self.logical_store)],
+                    vec![inner],
                 );
                 let logical_node = HashNode::from_store(logical_expr, &self.logical_store);
-                let peano_expr = PeanoExpression::logical(logical_node);
-                Ok(HashNode::from_store(peano_expr, &self.peano_store))
+                Ok(logical_node)
             }
             Token::Forall => {
                 let inner = self.parse_parenthesized(Self::parse_proposition)?;
-                let logical_expr = LogicalExpression::compound(
+                let logical_expr = ClassicalLogicalExpression::compound(
                     ClassicalOperator::Forall,
-                    vec![inner.value.as_logical(&self.logical_store)],
+                    vec![inner],
                 );
                 let logical_node = HashNode::from_store(logical_expr, &self.logical_store);
-                let peano_expr = PeanoExpression::logical(logical_node);
-                Ok(HashNode::from_store(peano_expr, &self.peano_store))
+                Ok(logical_node)
             }
             Token::Exists => {
                 let inner = self.parse_parenthesized(Self::parse_proposition)?;
-                let logical_expr = LogicalExpression::compound(
+                let logical_expr = ClassicalLogicalExpression::compound(
                     ClassicalOperator::Exists,
-                    vec![inner.value.as_logical(&self.logical_store)]
+                    vec![inner]
                 );
                 let logical_node = HashNode::from_store(logical_expr, &self.logical_store);
-                let peano_expr = PeanoExpression::logical(logical_node);
-                Ok(HashNode::from_store(peano_expr, &self.peano_store))
+                Ok(logical_node)
             }
             Token::Eq => {
                 let left = self.parse_parenthesized(Self::parse_expression)?;
                 let right = self.parse_parenthesized(Self::parse_expression)?;
                 let content_node = HashNode::from_store(PeanoContent::Equals(left, right), &self.content_store);
-                let peano_expr = PeanoExpression::domain(content_node);
-                Ok(HashNode::from_store(peano_expr, &self.peano_store))
+                let logical_expr = ClassicalLogicalExpression::atomic(content_node);
+                let logical_node = HashNode::from_store(logical_expr, &self.logical_store);
+                Ok(logical_node)
             }
             _ => Err(format!(
                 "Unexpected token {:?} for start of Proposition",
@@ -334,7 +326,7 @@ impl<'a> Parser<'a> {
 
     pub fn store_stats(&self) -> (usize, usize, usize) {
         (
-            self.peano_store.len(),
+            self.content_store.len(),
             self.expression_store.len(),
             self.logical_store.len(),
         )
@@ -350,16 +342,14 @@ impl<'a> Parser<'a> {
 /// This struct holds the various NodeStorage instances needed during
 /// axiom parsing, allowing external management of storage lifetime.
 pub struct AxiomStores {
-    pub peano_store: NodeStorage<PeanoExpression>,
     pub expression_store: NodeStorage<ArithmeticExpression>,
     pub content_store: NodeStorage<PeanoContent>,
-    pub logical_store: NodeStorage<LogicalExpression<BinaryTruth, PeanoContent, ClassicalOperator>>,
+    pub logical_store: NodeStorage<PeanoLogicalExpression>,
 }
 
 impl AxiomStores {
     pub fn new() -> Self {
         Self {
-            peano_store: NodeStorage::new(),
             expression_store: NodeStorage::new(),
             content_store: NodeStorage::new(),
             logical_store: NodeStorage::new(),
@@ -399,35 +389,19 @@ pub fn parse_axiom(
     name: &str,
     _stores: &AxiomStores,
 ) -> Result<
-    corpus_core::base::axioms::NamedAxiom<
-        BinaryTruth,
-        PeanoContent,
-        ClassicalOperator,
-    >,
+    corpus_core::base::axioms::NamedAxiom<PeanoLogicalExpression>,
     corpus_core::base::axioms::AxiomError,
 > {
     use corpus_core::base::axioms::{AxiomError, NamedAxiom};
-    use corpus_core::expression::DomainExpression;
 
     // Parse the input using the existing parser infrastructure
     let mut parser = Parser::new(input);
 
     // Try to parse as a proposition (logical expression)
-    let peano_expr = parser.parse_proposition().map_err(|e| AxiomError::ParseError {
+    let logical_expr = parser.parse_proposition().map_err(|e| AxiomError::ParseError {
         message: e,
         position: None,
     })?;
-
-    // Extract the LogicalExpression from the PeanoExpression (DomainExpression)
-    // Domain expressions (like PeanoContent::Equals) need to be lifted to logical expressions
-    let logical_expr = match peano_expr.value.as_ref() {
-        DomainExpression::Logical(logical_node) => logical_node.clone(),
-        DomainExpression::Domain(domain_node) => {
-            // Convert domain expression to logical expression
-            // For axioms, we expect domain content to be equality statements
-            convert_domain_to_logical(domain_node, &parser.logical_store, &parser.content_store)?
-        }
-    };
 
     // Create the NamedAxiom with the ClassicalAxiomConverter
     Ok(NamedAxiom::new_with_converter(
@@ -435,50 +409,4 @@ pub fn parse_axiom(
         logical_expr,
         Box::new(corpus_classical_logic::axioms::ClassicalAxiomConverter),
     ))
-}
-
-/// Convert a domain expression to a logical expression for axiom processing.
-///
-/// Domain-level equality (PeanoContent::Equals) is converted to logical-level
-/// equality (LogicalExpression::Compound with ClassicalOperator::Equals).
-///
-/// Domain-level arithmetic expressions are wrapped in PeanoContent::Arithmetic
-/// and then LogicalExpression::Atomic.
-fn convert_domain_to_logical(
-    domain_node: &HashNode<PeanoContent>,
-    logical_store: &NodeStorage<LogicalExpression<BinaryTruth, PeanoContent, ClassicalOperator>>,
-    content_store: &NodeStorage<PeanoContent>,
-) -> Result<HashNode<LogicalExpression<BinaryTruth, PeanoContent, ClassicalOperator>>, corpus_core::base::axioms::AxiomError> {
-    use crate::syntax::PeanoContent;
-
-    match domain_node.value.as_ref() {
-        PeanoContent::Equals(left, right) => {
-            // Wrap arithmetic expressions in PeanoContent::Arithmetic
-            let left_content = PeanoContent::Arithmetic(left.clone());
-            let right_content = PeanoContent::Arithmetic(right.clone());
-
-            // Create atomic logical expressions
-            let left_atomic = LogicalExpression::atomic(HashNode::from_store(left_content, content_store));
-            let right_atomic = LogicalExpression::atomic(HashNode::from_store(right_content, content_store));
-
-            // Create logical equality as a Compound expression
-            let left_logical = HashNode::from_store(left_atomic, logical_store);
-            let right_logical = HashNode::from_store(right_atomic, logical_store);
-
-            let equals_expr = LogicalExpression::compound(
-                ClassicalOperator::Equals,
-                vec![left_logical, right_logical],
-            );
-
-            Ok(HashNode::from_store(equals_expr, logical_store))
-        }
-        PeanoContent::Arithmetic(_) => {
-            // Wrap arithmetic expression in Atomic logical expression
-            let atomic = LogicalExpression::atomic(HashNode::from_store(
-                domain_node.value.as_ref().clone(),
-                content_store,
-            ));
-            Ok(HashNode::from_store(atomic, logical_store))
-        }
-    }
 }
