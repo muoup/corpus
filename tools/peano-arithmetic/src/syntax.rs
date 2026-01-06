@@ -1,11 +1,19 @@
 use core::fmt;
 
 use corpus_classical_logic::{BinaryTruth, ClassicalOperator};
-use corpus_core::expression::{DomainContent, DomainExpression};
+use corpus_core::expression::{DomainContent, DomainExpression, LogicalExpression};
 use corpus_core::nodes::{HashNode, HashNodeInner, NodeStorage, Hashing};
 use corpus_core::rewriting::RewriteRule;
 
 pub type PeanoExpression = DomainExpression<BinaryTruth, PeanoContent>;
+
+/// Logical expression type for Peano Arithmetic with full first-order logic support.
+/// This wraps PeanoContent in LogicalExpression to enable quantifiers (∀, ∃) and
+/// mixed logical operators (→, ∧, ∨, ¬, ↔).
+pub type PeanoLogicalExpression = LogicalExpression<BinaryTruth, PeanoContent, ClassicalOperator>;
+
+/// Hash node containing a Peano logical expression.
+pub type PeanoLogicalNode = HashNode<PeanoLogicalExpression>;
 
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
@@ -243,4 +251,16 @@ pub fn apply_successor_injectivity(
     // Create new equality: left_inner = right_inner
     let new_content = PeanoContent::Equals(left_inner.clone(), right_inner.clone());
     Some(HashNode::from_store(new_content, store))
+}
+
+/// Conversion functions for working with LogicalExpression wrapper.
+impl PeanoContent {
+    /// Convert PeanoContent to a LogicalExpression by wrapping it in an Atomic node.
+    /// This enables backwards compatibility when working with the new LogicalExpression-based prover.
+    pub fn to_logical(self, store: &NodeStorage<PeanoLogicalExpression>) -> PeanoLogicalNode {
+        let content_store = NodeStorage::<PeanoContent>::new();
+        let content_node = HashNode::from_store(self, &content_store);
+        let atomic = LogicalExpression::Atomic(content_node);
+        HashNode::from_store(atomic, store)
+    }
 }

@@ -1,4 +1,5 @@
 pub mod axioms;
+pub mod goal;
 pub mod operators;
 pub mod truth;
 
@@ -9,6 +10,7 @@ use corpus_core::truth::TruthValue;
 
 pub use axioms::ClassicalAxiomConverter;
 pub use corpus_core::base::axioms::{InferenceDirection, InferenceDirectional, NamedAxiom};
+pub use goal::AxiomGoalChecker;
 pub use operators::ClassicalOperator;
 pub use truth::BinaryTruth;
 

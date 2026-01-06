@@ -20,6 +20,8 @@ use crate::syntax::{ArithmeticExpression, PeanoContent};
 /// - `PLUS (<left>) (<right>)` - addition
 /// - `S (<arg>)` - successor function
 /// - `/0`, `/1`, `/2` - De Bruijn indices for variables
+/// - `∀ (<var>) (<expr>)` - universal quantifier
+/// - `¬ (<expr>)` - negation
 ///
 /// # Examples
 /// ```ignore
@@ -46,7 +48,7 @@ pub fn peano_arithmetic_axioms() -> Vec<NamedAxiom<BinaryTruth, PeanoContent, Cl
         // Axiom 2: Successor injectivity
         // S(x) = S(y) -> x = y
         parse_axiom(
-            "-> (EQ (S (/0)) (S (/1))) (EQ (/0) (/1))",
+            "FORALL (FORALL (IMPLIES (EQ (S (/0)) (S (/1))) (EQ (/0) (/1))))",
             "axiom2_successor_injectivity",
             &stores,
         )
@@ -55,7 +57,7 @@ pub fn peano_arithmetic_axioms() -> Vec<NamedAxiom<BinaryTruth, PeanoContent, Cl
         // Axiom 3: Additive identity
         // x + 0 = x
         parse_axiom(
-            "EQ (PLUS (/0) (0)) (/0)",
+            "FORALL (EQ (PLUS (/0) (0)) (/0))",
             "axiom3_additive_identity",
             &stores,
         )
@@ -64,12 +66,52 @@ pub fn peano_arithmetic_axioms() -> Vec<NamedAxiom<BinaryTruth, PeanoContent, Cl
         // Axiom 4: Additive successor
         // x + S(y) = S(x + y)
         parse_axiom(
-            "EQ (PLUS (/0) (S (/1))) (S (PLUS (/0) (/1)))",
+            "FORALL (FORALL (EQ (PLUS (/0) (S (/1))) (S (PLUS (/0) (/1)))))",
             "axiom4_additive_successor",
             &stores,
         )
         .expect("Failed to parse axiom4_additive_successor"),
     ]
+}
+
+/// PA axioms including those used for goal checking.
+///
+/// This function returns all the rewrite axioms plus additional axioms
+/// specifically for axiom-based goal checking:
+/// - Reflexivity: ∀x. (x = x)
+/// - Successor injectivity (contradiction form): ∀x. ¬(x = S(x))
+///
+/// These goal-checking axioms allow the prover to recognize when a theorem
+/// has been proven (matches a true axiom) or disproven (matches a negated axiom).
+pub fn peano_arithmetic_axioms_with_goals() -> Vec<NamedAxiom<BinaryTruth, PeanoContent, ClassicalOperator>> {
+    let mut axioms = peano_arithmetic_axioms();
+    let stores = AxiomStores::new();
+
+    // Add reflexivity axiom: ∀x. (x = x)
+    // This axiom states that any term equals itself, which is the basis
+    // for recognizing when a theorem has been proven.
+    axioms.push(
+        parse_axiom(
+            "FORALL (EQ (/0) (/0))",
+            "axiom_reflexivity",
+            &stores,
+        )
+        .expect("Failed to parse reflexivity axiom"),
+    );
+
+    // Add injectivity axiom (negated form for contradiction detection): ∀x. ¬(x = S(x))
+    // This axiom states that no term equals its successor, which allows
+    // the prover to recognize contradictions.
+    axioms.push(
+        parse_axiom(
+            "FORALL (¬ (EQ (/0) (S (/0))))",
+            "axiom_successor_injectivity",
+            &stores,
+        )
+        .expect("Failed to parse injectivity axiom"),
+    );
+
+    axioms
 }
 
 /// Generate arithmetic rewrite rules from PA axioms.
@@ -119,6 +161,25 @@ pub fn peano_arithmetic_rules() -> Vec<RewriteRule<ArithmeticExpression>> {
             RewriteRule::new("axiom4_additive_successor", pattern, replacement, RewriteDirection::Forward)
         },
     ]
+}
+
+/// Generate logical rewrite rules that work with LogicalExpression.
+///
+/// These rules preserve quantifier structure while applying arithmetic
+/// rewrites to the underlying domain content. The key is that patterns
+/// match at the LogicalExpression level (wrapping atomic PeanoContent).
+///
+/// For now, this returns wildcard patterns as the actual rewriting logic
+/// is handled by the custom `get_all_rewrites_logical` function in prover.rs
+/// which uses `apply_under_quantifiers` to preserve quantifier structure.
+pub fn peano_logical_rules() -> Vec<RewriteRule<crate::syntax::PeanoLogicalExpression>> {
+    // Note: These are placeholder rules. The actual rewriting logic for
+    // quantified expressions is handled by the prover's custom implementation
+    // which applies arithmetic rules under quantifiers while preserving structure.
+    //
+    // The prover uses the `apply_under_quantifiers` utility from quantifiers.rs
+    // to recursively apply arithmetic rewrites to the body of quantified formulas.
+    vec![]
 }
 
 #[cfg(test)]

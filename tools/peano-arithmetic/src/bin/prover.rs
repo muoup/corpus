@@ -1,8 +1,11 @@
+use corpus_core::DomainExpression;
 use corpus_core::base::nodes::{HashNode, NodeStorage};
+use corpus_core::expression::LogicalExpression;
+use corpus_core::proving::{Prover, SizeCostEstimator};
 use peano_arithmetic::parsing::Parser;
-use peano_arithmetic::prover::{prove_pa, ProofResultExt};
-use peano_arithmetic::syntax::{PeanoContent, PeanoExpression};
-use peano_arithmetic::axioms::peano_arithmetic_rules;
+use peano_arithmetic::prover::ProofResultExt;
+use peano_arithmetic::syntax::{PeanoContent, PeanoExpression, PeanoLogicalExpression, PeanoLogicalNode};
+use peano_arithmetic::goal::PeanoGoalChecker;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -23,38 +26,27 @@ fn main() {
     println!("Parsing theorem: {}", theorem);
 
     let mut parser = Parser::new(theorem);
+    
     match parser.parse_proposition() {
         Ok(proposition) => {
-            println!("Parsed: {}", proposition);
+            println!("Theorem: {}", proposition);
             println!();
-
-            // Extract the PeanoContent (equality expression) from the DomainExpression
-            let peano_content = match extract_equality_content(proposition) {
-                Ok(content) => content,
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    std::process::exit(1);
-                }
-            };
-
-            println!("Theorem: {}", peano_content);
-            println!();
-
-            println!("Loading Peano axioms...");
-            let arithmetic_rules = peano_arithmetic_rules();
-            for rule in &arithmetic_rules {
-                println!("  - {}", rule.name);
-            }
-            println!();
-
-            // Create a NodeStorage for PeanoContent
-            let store = NodeStorage::new();
 
             println!("Searching for proof (max 10000 nodes)...");
-            match prove_pa(&peano_content, &store, 10000) {
-                Some(result) => {
-                    println!();
-                    result.print();
+
+            // Create the prover with PeanoGoalChecker (axiom-based goal checking)
+            let goal_checker = PeanoGoalChecker::new();
+            let prover = Prover::new(10000, SizeCostEstimator, goal_checker);
+            
+            let proposition_as_domain = match proposition.value.as_ref() {
+                DomainExpression::Logical(logical_expr) => logical_expr.clone(),
+                DomainExpression::Domain(domain) => HashNode::from_store(LogicalExpression::Atomic(domain.clone()), &parser.logical_store)
+            };
+
+            match prover.prove(&proposition_as_domain) {
+                Some(_) => {
+                    println!("");
+                    println!("✓ Theorem proved!");
                 }
                 None => {
                     println!();

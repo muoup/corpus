@@ -1,13 +1,21 @@
 //! Goal checking for Peano Arithmetic proofs.
 //!
-//! This module provides goal checking implementations for the PA prover,
-//! specifically for checking when an equality is reflexive (x = x) or
-//! contradictory (n = S(n)).
+//! This module provides goal checking implementations for the PA prover.
+//!
+//! The module includes:
+//! - `AxiomPatternChecker`: Legacy checker using hard-coded patterns (for backwards compatibility)
+//! - `PeanoGoalChecker`: New checker using generic axiom-based goal checking from classical-logic
+//!
+//! The `PeanoGoalChecker` is the recommended approach as it uses the generic
+//! `AxiomGoalChecker` from the classical-logic crate, which checks theorems against
+//! axioms to determine proof completion.
 
-use corpus_classical_logic::BinaryTruth;
+use corpus_classical_logic::{BinaryTruth, ClassicalOperator, AxiomGoalChecker};
 use corpus_core::proving::GoalChecker;
 use corpus_core::base::nodes::HashNode;
-use crate::syntax::{PeanoContent, ArithmeticExpression};
+use corpus_core::expression::LogicalExpression;
+use crate::syntax::{PeanoContent, ArithmeticExpression, PeanoLogicalNode};
+use crate::axioms::peano_arithmetic_axioms_with_goals;
 
 /// Goal checker for Peano Arithmetic equalities.
 ///
@@ -94,6 +102,142 @@ fn is_successor_contradiction(
     match right.value.as_ref() {
         ArithmeticExpression::Successor(inner) => inner.hash() == left.hash(),
         _ => false,
+    }
+}
+
+/// PA goal checker using generic axiom-based goal checking.
+///
+/// This checker wraps the generic `AxiomGoalChecker` from the classical-logic crate,
+/// providing PA-specific axiom configuration. It determines if a theorem has been
+/// proven by checking if it matches any PA axiom.
+///
+/// # Examples
+///
+/// - Theorem `x = x` matches reflexivity axiom → `True`
+/// - Theorem `x = S(x)` matches negated injectivity axiom → `False`
+/// - Theorem `0 + S(0) = S(0)` matches additive identity axiom → `True`
+///
+/// This is the recommended goal checker for Peano Arithmetic proofs, as it properly
+/// separates axiom definition from goal checking logic.
+pub struct PeanoGoalChecker {
+    inner: AxiomGoalChecker<BinaryTruth, PeanoContent, ClassicalOperator>,
+}
+
+impl PeanoGoalChecker {
+    /// Create a new PA goal checker with standard PA axioms.
+    pub fn new() -> Self {
+        let axioms = peano_arithmetic_axioms_with_goals();
+        Self {
+            inner: AxiomGoalChecker::new(axioms),
+        }
+    }
+
+    /// Create a new PA goal checker with custom axioms.
+    pub fn with_axioms(axioms: Vec<corpus_classical_logic::NamedAxiom<BinaryTruth, PeanoContent, ClassicalOperator>>) -> Self {
+        Self {
+            inner: AxiomGoalChecker::new(axioms),
+        }
+    }
+}
+
+impl Default for PeanoGoalChecker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl GoalChecker<crate::syntax::PeanoLogicalExpression, BinaryTruth> for PeanoGoalChecker {
+    fn check(&self, expr: &PeanoLogicalNode) -> Option<BinaryTruth> {
+        self.inner.check(expr)
+    }
+}
+
+/// Legacy quantified goal checker (DEPRECATED).
+///
+/// This checker uses hard-coded patterns for reflexivity and contradictions.
+/// It is kept for backwards compatibility but should not be used for new code.
+/// Use `PeanoGoalChecker` instead, which uses proper axiom-based goal checking.
+#[deprecated(note = "Use PeanoGoalChecker for axiom-based goal checking")]
+pub struct QuantifiedGoalChecker;
+
+impl QuantifiedGoalChecker {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for QuantifiedGoalChecker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl GoalChecker<crate::syntax::PeanoLogicalExpression, BinaryTruth> for QuantifiedGoalChecker {
+    fn check(&self, expr: &PeanoLogicalNode) -> Option<BinaryTruth> {
+        match expr.value.as_ref() {
+            // Handle compound logical expressions
+            LogicalExpression::Compound { operator, operands, .. } => {
+                match operator {
+                    // Keep quantifiers intact - recursively check the body
+                    ClassicalOperator::Forall | ClassicalOperator::Exists => {
+                        if operands.len() == 1 {
+                            self.check(&operands[0])
+                        } else {
+                            None
+                        }
+                    }
+                    // Both operands must be true for AND
+                    ClassicalOperator::And => {
+                        let left = self.check(&operands[0])?;
+                        let right = self.check(&operands[1])?;
+                        if left == BinaryTruth::True && right == BinaryTruth::True {
+                            Some(BinaryTruth::True)
+                        } else {
+                            None
+                        }
+                    }
+                    // For implication, check if consequent is provable
+                    ClassicalOperator::Implies => {
+                        self.check(&operands[1])
+                    }
+                    // For iff, both directions must give same result
+                    ClassicalOperator::Iff => {
+                        let left = self.check(&operands[0])?;
+                        let right = self.check(&operands[1])?;
+                        if left == right {
+                            Some(left)
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                }
+            }
+            // Handle atomic domain expressions
+            LogicalExpression::Atomic(domain) => check_atomic_goal(domain),
+        }
+    }
+}
+
+/// Check if an atomic domain expression is a goal.
+///
+/// This handles the base case of domain content (equalities or arithmetic).
+/// NOTE: This uses hard-coded patterns. Use `PeanoGoalChecker` for proper
+/// axiom-based goal checking.
+fn check_atomic_goal(domain: &HashNode<PeanoContent>) -> Option<BinaryTruth> {
+    match domain.value.as_ref() {
+        PeanoContent::Equals(left, right) => {
+            // Check for reflexive equality (x = x)
+            if left.hash() == right.hash() {
+                return Some(BinaryTruth::True);
+            }
+            // Check for contradiction (n = S(n))
+            if is_successor_contradiction(left, right) || is_successor_contradiction(right, left) {
+                return Some(BinaryTruth::False);
+            }
+            None
+        }
+        PeanoContent::Arithmetic(_) => None,
     }
 }
 

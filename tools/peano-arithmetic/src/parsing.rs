@@ -163,10 +163,11 @@ impl<'a> Iterator for Lexer<'a> {
 
 pub struct Parser<'a> {
     tokens: Peekable<Lexer<'a>>,
-    peano_store: NodeStorage<PeanoExpression>,
-    expression_store: NodeStorage<ArithmeticExpression>,
-    content_store: NodeStorage<PeanoContent>,
-    logical_store: NodeStorage<LogicalExpression<BinaryTruth, PeanoContent, ClassicalOperator>>,
+    
+    pub peano_store: NodeStorage<PeanoExpression>,
+    pub expression_store: NodeStorage<ArithmeticExpression>,
+    pub content_store: NodeStorage<PeanoContent>,
+    pub logical_store: NodeStorage<LogicalExpression<BinaryTruth, PeanoContent, ClassicalOperator>>,
 }
 
 impl<'a> Parser<'a> {
