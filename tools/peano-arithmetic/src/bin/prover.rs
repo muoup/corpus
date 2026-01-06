@@ -1,7 +1,6 @@
 use corpus_core::proving::{Prover, SizeCostEstimator};
-use corpus_classical_logic::BinaryTruth;
-use peano_arithmetic::parsing::Parser;
-use peano_arithmetic::goal::PeanoGoalChecker;
+use corpus_classical_logic::{BinaryTruth, ClassicalTruthChecker};
+use peano_arithmetic::parsing::PeanoParser;
 use peano_arithmetic::syntax::PeanoLogicalExpression;
 
 fn main() {
@@ -18,9 +17,10 @@ fn main() {
     let theorem = &args[1];
     println!("Parsing theorem: {}", theorem);
 
-    let mut parser = Parser::new(theorem);
-
-    match parser.parse_proposition() {
+    let mut parser = PeanoParser::new(theorem);
+    let stores = peano_arithmetic::PeanoStores::new();
+    
+    match parser.parse_proposition(&stores) {
         Ok(proposition) => {
             println!("Theorem: {}", proposition);
             println!();
@@ -28,7 +28,7 @@ fn main() {
             println!("Searching for proof (max 10000 nodes)...");
 
             // Create the prover with PeanoGoalChecker (axiom-based goal checking)
-            let goal_checker = PeanoGoalChecker::new();
+            let goal_checker = ClassicalTruthChecker::new();
             let prover: Prover<PeanoLogicalExpression, SizeCostEstimator, BinaryTruth, _> =
                 Prover::new(10000, SizeCostEstimator, goal_checker);
 

@@ -8,25 +8,9 @@ use std::{
 
 // --- Public Interface ---
 
-pub trait HashNodeInner: Sized {
+pub trait HashNodeInner: Sized + Clone {
     fn hash(&self) -> u64;
     fn size(&self) -> u64;
-
-    fn decompose(&self) -> Option<(u64, Vec<HashNode<Self>>)> {
-        None
-    }
- 
-    /// Construct an expression from an opcode and children.
-    ///
-    /// Returns `None` if the opcode is not valid for this type or if this type
-    /// does not support compound expressions.
-    fn construct_from_parts(
-        _opcode: u64,
-        _children: Vec<HashNode<Self>>,
-        _store: &NodeStorage<Self>,
-    ) -> Option<HashNode<Self>> {
-        None
-    }
 }
 
 pub struct Hashing;

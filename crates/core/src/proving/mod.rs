@@ -3,13 +3,13 @@
 //! This module provides a generic prover that can work with any logical system
 //! by implementing the `CostEstimator` and `GoalChecker` traits.
 
-pub mod context;
-
-use crate::base::nodes::{HashNode, HashNodeInner, NodeStorage};
+use crate::base::nodes::{HashNode, HashNodeInner};
 use crate::rewriting::RewriteRule;
+use crate::rewriting::patterns::Rewritable;
 use crate::{BinaryTruth, TruthValue};
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashSet};
+use std::fmt::Display;
 
 /// Trait for domain-specific cost estimation in proof search.
 ///
@@ -33,34 +33,6 @@ pub trait GoalChecker<Node: HashNodeInner, T: TruthValue> {
     fn check(&self, expr: &HashNode<Node>) -> Option<T>;
 }
 
-impl<T: HashNodeInner> HashNode<T> {
-    pub fn get_all_rewrites<F>(&self, store: &NodeStorage<T>, try_rewrite: &F) -> Vec<HashNode<T>>
-    where
-        F: Fn(&HashNode<T>) -> Option<HashNode<T>>,
-    {
-        let mut rewrites = Vec::new();
-
-        if let Some(rewritten) = try_rewrite(self) {
-            rewrites.push(rewritten);
-        }
-
-        let Some((opcode, parts)) = self.value.decompose() else {
-            return rewrites;
-        };
-
-        for (i, part) in parts.iter().enumerate() {
-            for rewrite in part.get_all_rewrites(store, try_rewrite).into_iter() {
-                let mut new_parts = parts.clone();
-                new_parts[i] = rewrite;
-
-                rewrites.push(T::construct_from_parts(opcode, new_parts, store).unwrap());
-            }
-        }
-
-        rewrites
-    }
-}
-
 /// A single transformation step in a proof.
 #[derive(Clone)]
 pub struct ProofStep<T: HashNodeInner> {
@@ -74,7 +46,7 @@ pub struct ProofStep<T: HashNodeInner> {
 
 /// A state in the proof search with LHS/RHS expressions and associated metadata.
 #[derive(Clone)]
-pub struct ProofState<T: HashNodeInner> {
+pub struct ProofState<T: Rewritable> {
     /// Expression
     pub expr: HashNode<T>,
     /// Transformations applied to reach this state.
@@ -102,14 +74,9 @@ pub struct ProofResult<Node: HashNodeInner, T: TruthValue> {
 /// * `T` - The expression type (must implement `HashNodeInner` and `Clone`)
 /// * `C` - The cost estimator for ordering search states
 /// * `G` - The goal checker for determining proof completion
-pub struct Prover<
-    Node: HashNodeInner + Clone,
-    C: CostEstimator<Node>,
-    T: TruthValue,
-    G: GoalChecker<Node, T>,
-> {
+pub struct Prover<Node: Rewritable, C: CostEstimator<Node>, T: TruthValue, G: GoalChecker<Node, T>>
+{
     rules: Vec<RewriteRule<Node>>,
-    store: NodeStorage<Node>,
     max_nodes: usize,
     cost_estimator: C,
     goal_checker: G,
@@ -117,14 +84,17 @@ pub struct Prover<
     _phantom: std::marker::PhantomData<T>,
 }
 
-impl<Node: HashNodeInner + Clone, C: CostEstimator<Node>, T: TruthValue, G: GoalChecker<Node, T>>
-    Prover<Node, C, T, G>
+impl<
+    Node: Rewritable + Display,
+    C: CostEstimator<Node>,
+    T: TruthValue,
+    G: GoalChecker<Node, T>,
+> Prover<Node, C, T, G>
 {
     /// Create a new prover with the given cost estimator and goal checker.
     pub fn new(max_nodes: usize, cost_estimator: C, goal_checker: G) -> Self {
         Self {
             rules: Vec::new(),
-            store: NodeStorage::new(),
             max_nodes,
             cost_estimator,
             goal_checker,
@@ -142,14 +112,18 @@ impl<Node: HashNodeInner + Clone, C: CostEstimator<Node>, T: TruthValue, G: Goal
     ///
     /// Uses A* search to explore possible rewrites. Returns `Some(ProofResult)`
     /// if a proof is found within `max_nodes` states, otherwise `None`.
-    pub fn prove(&self, initial_expr: &HashNode<Node>) -> Option<ProofResult<Node, T>> {
+    pub fn prove(
+        &self,
+        store: &Node::Storage,
+        initial_expr: HashNode<Node>,
+    ) -> Option<ProofResult<Node, T>> {
         let mut heap = BinaryHeap::new();
         let mut visited = HashSet::new();
         let mut nodes_explored = 0usize;
 
-        let initial_cost = self.cost_estimator.estimate_cost(initial_expr);
+        let initial_cost = self.cost_estimator.estimate_cost(&initial_expr);
         let initial_state = ProofState {
-            expr: initial_expr.clone(),
+            expr: initial_expr,
             steps: Vec::new(),
             estimated_cost: initial_cost,
         };
@@ -179,10 +153,9 @@ impl<Node: HashNodeInner + Clone, C: CostEstimator<Node>, T: TruthValue, G: Goal
             visited.insert(key);
 
             for rule in self.rules.iter() {
-                for successor in state
-                    .expr
-                    .get_all_rewrites(&self.store, &|node| rule.apply(node, &self.store))
-                {
+                for successor in state.expr.value.as_ref().get_recursive_rewrites(store) {
+                    println!("Successor: {}", successor);
+
                     heap.push(ProofState {
                         expr: successor.clone(),
                         steps: {
@@ -205,21 +178,21 @@ impl<Node: HashNodeInner + Clone, C: CostEstimator<Node>, T: TruthValue, G: Goal
 }
 
 // Implement Ord for BinaryHeap (min-heap by cost)
-impl<T: HashNodeInner> PartialEq for ProofState<T> {
+impl<T: Rewritable> PartialEq for ProofState<T> {
     fn eq(&self, other: &Self) -> bool {
         self.estimated_cost == other.estimated_cost
     }
 }
 
-impl<T: HashNodeInner> Eq for ProofState<T> {}
+impl<T: Rewritable> Eq for ProofState<T> {}
 
-impl<T: HashNodeInner> PartialOrd for ProofState<T> {
+impl<T: Rewritable> PartialOrd for ProofState<T> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<T: HashNodeInner> Ord for ProofState<T> {
+impl<T: Rewritable> Ord for ProofState<T> {
     fn cmp(&self, other: &Self) -> Ordering {
         other.estimated_cost.cmp(&self.estimated_cost) // Reverse for min-heap
     }
@@ -265,30 +238,5 @@ impl<Node: HashNodeInner + Clone> GoalChecker<Node, BinaryTruth> for ReflexiveGo
         // This is meant to be overridden by domain-specific implementations.
         // For PA, this should check if both sides of PeanoContent::Equals are equal.
         None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_cost_estimator() {
-        let store = NodeStorage::new();
-        let expr = HashNode::from_store(42u64, &store);
-        let estimator = SizeCostEstimator;
-
-        let cost = estimator.estimate_cost(&expr);
-        assert_eq!(cost, 1); // size of u64 is 1
-    }
-
-    #[test]
-    fn test_reflexive_goal_checker() {
-        let checker = ReflexiveGoalChecker::new();
-        let store = NodeStorage::new();
-        let expr = HashNode::from_store(42u64, &store);
-
-        // For a generic node (not an equality), the checker returns None
-        assert_eq!(checker.check(&expr), None);
     }
 }

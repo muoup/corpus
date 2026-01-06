@@ -4,12 +4,13 @@
 //! implements the `LogicalExpression` trait from `corpus_core`. It also provides
 //! the `DomainContent` trait which is specific to classical logic systems.
 
-use corpus_core::base::expression::LogicalExpression as LogicalExpressionTrait;
-use corpus_core::base::logic::LogicalOperator;
-use corpus_core::nodes::{HashNode, HashNodeInner, NodeStorage, Hashing};
-use corpus_core::truth::TruthValue;
-use std::fmt::{Debug, Display};
-use std::marker::PhantomData;
+use corpus_core::{
+    nodes::{HashNode, HashNodeInner, Hashing, NodeStorage},
+    rewriting::patterns::Rewritable,
+};
+use std::fmt::Debug;
+
+use crate::BinaryTruth;
 
 /// Concrete logical expression for classical logic.
 ///
@@ -23,168 +24,135 @@ use std::marker::PhantomData;
 /// * `D` - The domain content type (e.g., `PeanoContent`)
 /// * `Op` - The logical operator type (e.g., `ClassicalOperator`)
 #[derive(Debug, Clone, PartialEq)]
-pub enum ClassicalLogicalExpression<T: TruthValue, D: DomainContent<T>, Op: LogicalOperator<T>>
-where
-    T: HashNodeInner,
-    D: HashNodeInner,
-    Op: HashNodeInner,
-{
-    /// Atomic domain expression (leaf node)
-    Atomic(HashNode<D>),
-    /// Compound expression with operator and operands
-    Compound {
-        operator: Op,
-        operands: Vec<HashNode<Self>>,
-        _phantom: PhantomData<T>,
-    },
+pub enum ClassicalLogicalExpression<D: DomainContent> {
+    And(HashNode<Self>, HashNode<Self>),
+    Or(HashNode<Self>, HashNode<Self>),
+    Not(HashNode<Self>),
+    Imply(HashNode<Self>, HashNode<Self>),
+    Iff(HashNode<Self>, HashNode<Self>),
+    ForAll(HashNode<Self>),
+    Exists(HashNode<Self>),
+    Equals(HashNode<D>, HashNode<D>),
+
+    BooleanConstant(BinaryTruth),
+
+    #[allow(non_camel_case_types)]
+    _phantom(),
 }
 
-impl<T: TruthValue, D: DomainContent<T>, Op: LogicalOperator<T>> ClassicalLogicalExpression<T, D, Op>
+pub struct LogicalStorage<D: DomainContent> {
+    pub logical_storage: NodeStorage<ClassicalLogicalExpression<D>>,
+    pub domain_storage: D::Storage,
+}
+
+/// Content existing in the "Domain of Discourse" for classical logic.
+///
+/// # Type Parameters
+///
+/// * `T` - The truth value type (e.g., `BinaryTruth`)
+pub trait DomainContent
 where
-    T: HashNodeInner,
-    D: HashNodeInner,
-    Op: HashNodeInner,
+    Self: HashNodeInner,
+    Self: Rewritable,
 {
-    /// Create an atomic expression from domain content.
-    pub fn atomic(value: HashNode<D>) -> Self {
-        Self::Atomic(value)
-    }
+}
 
-    /// Create a compound expression from an operator and operands.
-    pub fn compound(operator: Op, operands: Vec<HashNode<Self>>) -> Self {
-        Self::Compound {
-            operator,
-            operands,
-            _phantom: PhantomData,
-        }
-    }
-
-    /// Get the operator if this is a compound expression.
-    pub fn operator(&self) -> Option<&Op> {
-        match self {
-            Self::Compound { operator, .. } => Some(operator),
-            _ => None,
-        }
-    }
-
+impl<D: DomainContent> ClassicalLogicalExpression<D> {
     /// Get the operands if this is a compound expression.
-    pub fn operands(&self) -> Option<&Vec<HashNode<Self>>> {
+    pub fn logical_operands(&self) -> Option<Vec<HashNode<Self>>> {
         match self {
-            Self::Compound { operands, .. } => Some(operands),
+            Self::And(left, right) => Some(vec![left.clone(), right.clone()]),
+            Self::Or(left, right) => Some(vec![left.clone(), right.clone()]),
+            Self::Not(operand) => Some(vec![operand.clone()]),
+            Self::Imply(left, right) => Some(vec![left.clone(), right.clone()]),
+            Self::Iff(left, right) => Some(vec![left.clone(), right.clone()]),
+            Self::ForAll(operand) => Some(vec![operand.clone()]),
+            Self::Exists(operand) => Some(vec![operand.clone()]),
+
+            Self::BooleanConstant(_) => Some(vec![]),
+            Self::_phantom(..) | Self::Equals(..) => None,
+        }
+    }
+
+    pub fn domain_operands(&self) -> Option<Vec<HashNode<D>>> {
+        match self {
+            Self::Equals(left, right) => Some(vec![left.clone(), right.clone()]),
+
             _ => None,
         }
     }
 }
 
-impl<T: TruthValue, D: DomainContent<T>, Op: LogicalOperator<T>> HashNodeInner
-    for ClassicalLogicalExpression<T, D, Op>
-where
-    T: HashNodeInner,
-    D: HashNodeInner,
-    Op: HashNodeInner,
-{
+impl<D: DomainContent> HashNodeInner for ClassicalLogicalExpression<D> {
     fn hash(&self) -> u64 {
         match self {
-            Self::Atomic(value) => Hashing::root_hash(0, &[value.hash()]),
-            Self::Compound { operator, operands, .. } => {
-                let mut all_hashes = vec![operator.hash()];
-                all_hashes.extend(operands.iter().map(|n| n.hash()));
+            Self::Equals(left, right) => {
+                let all_hashes = vec![Hashing::opcode("DOMAIN"), left.hash(), right.hash()];
                 Hashing::root_hash(1, &all_hashes)
+            }
+
+            Self::And(left, right) => {
+                let all_hashes = vec![Hashing::opcode("AND"), left.hash(), right.hash()];
+                Hashing::root_hash(1, &all_hashes)
+            }
+
+            Self::Or(left, right) => {
+                let all_hashes = vec![Hashing::opcode("OR"), left.hash(), right.hash()];
+                Hashing::root_hash(1, &all_hashes)
+            }
+
+            Self::Not(operand) => {
+                let all_hashes = vec![Hashing::opcode("NOT"), operand.hash()];
+                Hashing::root_hash(1, &all_hashes)
+            }
+
+            Self::Imply(left, right) => {
+                let all_hashes = vec![Hashing::opcode("IMPLY"), left.hash(), right.hash()];
+                Hashing::root_hash(1, &all_hashes)
+            }
+
+            Self::Iff(left, right) => {
+                let all_hashes = vec![Hashing::opcode("IFF"), left.hash(), right.hash()];
+                Hashing::root_hash(1, &all_hashes)
+            }
+
+            Self::ForAll(operand) => {
+                let all_hashes = vec![Hashing::opcode("FORALL"), operand.hash()];
+                Hashing::root_hash(1, &all_hashes)
+            }
+
+            Self::Exists(operand) => {
+                let all_hashes = vec![Hashing::opcode("EXISTS"), operand.hash()];
+                Hashing::root_hash(1, &all_hashes)
+            }
+
+            Self::BooleanConstant(value) => {
+                let all_hashes = vec![Hashing::opcode("BOOLEAN_CONSTANT"), value.hash()];
+                Hashing::root_hash(1, &all_hashes)
+            }
+
+            Self::_phantom(..) => {
+                unreachable!()
             }
         }
     }
 
     fn size(&self) -> u64 {
         match self {
-            Self::Atomic(value) => 1 + value.size(),
-            Self::Compound { operator, operands, .. } => {
-                1 + operator.size() + operands.iter().map(|n| n.size()).sum::<u64>()
+            Self::BooleanConstant(_) => 1,
+
+            Self::Equals(lhs, rhs) => 1 + lhs.size() + rhs.size(),
+
+            Self::And(left, right)
+            | Self::Or(left, right)
+            | Self::Imply(left, right)
+            | Self::Iff(left, right) => 1 + left.size() + right.size(),
+
+            Self::Not(operand) | Self::ForAll(operand) | Self::Exists(operand) => {
+                1 + operand.size()
             }
-        }
-    }
 
-    fn decompose(&self) -> Option<(u64, Vec<HashNode<Self>>)> {
-        match self {
-            Self::Compound { operator, operands, .. } => {
-                Some((operator.hash(), operands.clone()))
-            }
-            Self::Atomic(_) => None,
-        }
-    }
-
-    fn construct_from_parts(
-        opcode: u64,
-        children: Vec<HashNode<Self>>,
-        _store: &NodeStorage<Self>,
-    ) -> Option<HashNode<Self>> {
-        // This requires being able to map from opcode to operator, which
-        // depends on the specific operator type.
-        // For now, this returns None - implementations should use the
-        // explicit constructors (atomic, compound) instead.
-        None
-    }
-}
-
-impl<T: TruthValue, D: DomainContent<T>, Op: LogicalOperator<T>> LogicalExpressionTrait
-    for ClassicalLogicalExpression<T, D, Op>
-where
-    T: HashNodeInner + Display,
-    D: HashNodeInner + Display + Debug + Clone,
-    Op: HashNodeInner + Display + Debug,
-{
-    type TruthValue = T;
-}
-
-impl<T: TruthValue, D: DomainContent<T>, Op: LogicalOperator<T>> Display
-    for ClassicalLogicalExpression<T, D, Op>
-where
-    D: Display + HashNodeInner,
-    T: Display + HashNodeInner,
-    Op: Display + HashNodeInner,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Atomic(value) => write!(f, "{}", value),
-            Self::Compound {
-                operator, operands, ..
-            } => match operator.arity() {
-                1 => write!(f, "({} {})", operator, &operands[0]),
-                2 => write!(f, "({} {} {})", &operands[0], operator, &operands[1]),
-                _ => write!(
-                    f,
-                    "({} {})",
-                    operator,
-                    operands
-                        .iter()
-                        .map(|op| format!("{}", op))
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                ),
-            },
+            Self::_phantom(..) => unreachable!(),
         }
     }
 }
-
-/// Domain content trait for classical logic.
-///
-/// This trait is now specific to classical logic systems, having been
-/// moved from the core crate. Each domain type (e.g., PeanoContent) implements
-/// this trait to specify which logical operators it uses.
-///
-/// # Type Parameters
-///
-/// * `T` - The truth value type (e.g., `BinaryTruth`)
-pub trait DomainContent<T: TruthValue>
-where
-    Self: HashNodeInner,
-    Self::Operator: HashNodeInner,
-{
-    /// The logical operator type used with this domain content.
-    type Operator: LogicalOperator<T>;
-}
-
-/// Type alias for backward compatibility.
-///
-/// This allows existing code to continue using the name `LogicalExpression`
-/// without changes, while the actual implementation is now in classical-logic.
-pub type LogicalExpression<T, D, Op> = ClassicalLogicalExpression<T, D, Op>;
