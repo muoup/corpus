@@ -1,10 +1,8 @@
 use corpus_core::DomainExpression;
-use corpus_core::base::nodes::{HashNode, NodeStorage};
+use corpus_core::base::nodes::HashNode;
 use corpus_core::expression::LogicalExpression;
 use corpus_core::proving::{Prover, SizeCostEstimator};
 use peano_arithmetic::parsing::Parser;
-use peano_arithmetic::prover::ProofResultExt;
-use peano_arithmetic::syntax::{PeanoContent, PeanoExpression, PeanoLogicalExpression, PeanoLogicalNode};
 use peano_arithmetic::goal::PeanoGoalChecker;
 
 fn main() {
@@ -15,10 +13,6 @@ fn main() {
         println!();
         println!("Example: {} \"EQ (PLUS (S(0)) (0)) (S(0))\"", args[0]);
         println!();
-        println!("Theorem format: EQ (left) (right)");
-        println!("  left, right: Peano arithmetic expressions");
-        println!("  Operators: PLUS, S (successor), numbers (0, 1, 2, ...)");
-        println!("  Variables: /0, /1, /2, ... (De Bruijn indices)");
         std::process::exit(1);
     }
 
@@ -58,14 +52,5 @@ fn main() {
             eprintln!("Parse error: {}", e);
             std::process::exit(1);
         }
-    }
-}
-
-fn extract_equality_content(
-    proposition: HashNode<PeanoExpression>,
-) -> Result<HashNode<PeanoContent>, String> {
-    match proposition.value.as_domain() {
-        Some(content) => Ok(content.clone()),
-        None => Err("Theorem must be an equality (EQ ...).".to_string()),
     }
 }

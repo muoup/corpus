@@ -107,6 +107,12 @@ where
                         return Some(T::from_bool(false));
                     }
                 }
+                // Check if axiom body is negation and theorem matches the negated content
+                if let Some(negated_axiom_body) = extract_negation(axiom_body) {
+                    if expressions_match(theorem, &negated_axiom_body) {
+                        return Some(T::from_bool(false));
+                    }
+                }
             }
         }
         // Handle simple axioms without quantifiers
@@ -115,9 +121,15 @@ where
             if expressions_match(theorem, &axiom.expression) {
                 return Some(T::from_bool(true));
             }
-            // Negation match
+            // Negation match: theorem is ¬(axiom)
             if let Some(negated) = extract_negation(theorem) {
                 if expressions_match(&negated, &axiom.expression) {
+                    return Some(T::from_bool(false));
+                }
+            }
+            // Negation match: axiom is ¬(theorem)
+            if let Some(negated_axiom) = extract_negation(&axiom.expression) {
+                if expressions_match(theorem, &negated_axiom) {
                     return Some(T::from_bool(false));
                 }
             }

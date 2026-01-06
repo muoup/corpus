@@ -7,4 +7,4 @@ pub mod rewrite;
 pub mod goal;
 pub mod quantifiers;
 
-pub use prover::{PeanoProver, create_prover, ProofResult, ProofState, ProofStep, ProofResultExt};
+pub use prover::{PeanoLogicalProver, create_logical_prover};
