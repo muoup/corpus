@@ -8,7 +8,7 @@ use corpus_core::{
     nodes::{HashNode, HashNodeInner, Hashing, NodeStorage},
     rewriting::patterns::Rewritable,
 };
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 use crate::BinaryTruth;
 
@@ -153,6 +153,26 @@ impl<D: DomainContent> HashNodeInner for ClassicalLogicalExpression<D> {
             }
 
             Self::_phantom(..) => unreachable!(),
+        }
+    }
+}
+
+impl<D: DomainContent> Display for ClassicalLogicalExpression<D>
+where
+    D: Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::And(l, r) => write!(f, "({} ∧ {})", l, r),
+            Self::Or(l, r) => write!(f, "({} ∨ {})", l, r),
+            Self::Not(x) => write!(f, "¬{}", x),
+            Self::Imply(l, r) => write!(f, "({} → {})", l, r),
+            Self::Iff(l, r) => write!(f, "({} ↔ {})", l, r),
+            Self::ForAll(x) => write!(f, "∀{}", x),
+            Self::Exists(x) => write!(f, "∃{}", x),
+            Self::Equals(l, r) => write!(f, "({} = {})", l, r),
+            Self::BooleanConstant(b) => write!(f, "{}", b),
+            Self::_phantom() => write!(f, "_"),
         }
     }
 }

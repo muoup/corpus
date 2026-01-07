@@ -1,52 +1,48 @@
 //! Peano Arithmetic axioms using string-based parsing.
 //!
 //! This module defines PA axioms as concise string declarations that are
-//! parsed into first-class `NamedAxiom` instances.
+//! parsed into rewrite rules.
 
 use crate::{PeanoStores, parsing::PeanoParser, syntax::PeanoLogicalExpression};
-use corpus_core::rewriting::RewriteRule;
+use corpus_core::rewriting::{RewriteRule, patterns::AsRewriteRules};
 
 struct AxiomFormat {
     name: &'static str,
     content: &'static str,
 }
 
-/// PA axioms as first-class NamedAxiom instances.
+/// PA axioms as rewrite rules.
 ///
 /// Uses string-based parsing for clean, readable axiom declarations.
 ///
 /// # Syntax
 /// - `EQ (<left>) (<right>)` - equality
-/// - `-> (<antecedent>) (<consequent>)` - implication
 /// - `PLUS (<left>) (<right>)` - addition
 /// - `S (<arg>)` - successor function
 /// - `/0`, `/1`, `/2` - De Bruijn indices for variables
-/// - `∀ (<var>) (<expr>)` - universal quantifier
-/// - `¬ (<expr>)` - negation
+/// - `FORALL (<expr>)` - universal quantifier
 ///
 /// # Examples
 /// ```ignore
-/// // Successor injectivity: S(x) = S(y) -> x = y
-/// "-> (EQ (S (/0)) (S (/1))) (EQ (/0) (/1))"
-///
 /// // Additive identity: x + 0 = x
-/// "EQ (PLUS (/0) (0)) (/0)"
+/// "FORALL (EQ (PLUS (/0) (0)) (/0))"
 ///
 /// // Additive successor: x + S(y) = S(x + y)
-/// "EQ (PLUS (/0) (S (/1))) (S (PLUS (/0) (/1)))"
+/// "FORALL (FORALL (EQ (PLUS (/0) (S (/1))) (S (PLUS (/0) (/1)))))"
 /// ```
 ///
 /// Note:
-/// - PA axioms are implicitly universal (apply to all variable values)
-/// - Implication `->` requires both antecedent and consequent to be
-///   parenthesized separately
-/// - Quantifiers are not needed in axiom strings since rewrite rules
-///   implicitly apply universally
+/// - PA axioms use universal quantifiers which are stripped to extract equality patterns
+/// - Each equality becomes a bidirectional rewrite rule
 pub fn pa_axiom_rules(stores: &PeanoStores) -> Vec<RewriteRule<PeanoLogicalExpression>> {
     let axioms = vec![
         AxiomFormat {
-            name: "axiom2_successor_injectivity",
-            content: "FORALL (FORALL (IMPLIES (EQ (S (/0)) (S (/1))) (EQ (/0) (/1))))",
+            name: "axiom1_reflexivity",
+            content: "FORALL (EQ (/0) (/0))",
+        },
+        AxiomFormat {
+            name: "axiom2_symmetry",
+            content: "FORALL (FORALL (IMPLIES (EQ (/0) (/1)) (EQ (/1) (/0))))",
         },
         AxiomFormat {
             name: "axiom3_additive_identity",
@@ -60,8 +56,7 @@ pub fn pa_axiom_rules(stores: &PeanoStores) -> Vec<RewriteRule<PeanoLogicalExpre
 
     axioms
         .into_iter()
-        .map(|axiom| generate_axiom_rewrites(axiom.name, axiom.content, stores))
-        .flatten()
+        .flat_map(|axiom| generate_axiom_rewrites(axiom.name, axiom.content, stores))
         .collect()
 }
 
@@ -71,11 +66,9 @@ pub(crate) fn generate_axiom_rewrites(
     stores: &PeanoStores,
 ) -> Vec<RewriteRule<PeanoLogicalExpression>> {
     let parsed = PeanoParser::parse(axiom_content, stores).expect("Parsing failed");
-    todo!("Should use standard pattern rewriting")
+    let pattern = parsed
+        .value
+        .decompose_to_rewrite_rules(axiom_name, &stores.storage);
     
-    // let rewrites = converter
-    //     .convert_axiom(&parsed, axiom_name)
-    //     .expect("Axiom conversion failed");
-
-    // rewrites
+    pattern
 }

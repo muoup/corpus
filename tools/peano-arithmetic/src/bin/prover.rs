@@ -1,7 +1,6 @@
 use corpus_core::proving::{Prover, SizeCostEstimator};
 use corpus_classical_logic::{BinaryTruth, ClassicalTruthChecker};
-use peano_arithmetic::parsing::PeanoParser;
-use peano_arithmetic::syntax::PeanoLogicalExpression;
+use peano_arithmetic::{axioms, parsing::PeanoParser, syntax::PeanoLogicalExpression};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -29,10 +28,19 @@ fn main() {
 
             // Create the prover with PeanoGoalChecker (axiom-based goal checking)
             let goal_checker = ClassicalTruthChecker::new();
-            let prover: Prover<PeanoLogicalExpression, SizeCostEstimator, BinaryTruth, _> =
+            let mut prover: Prover<PeanoLogicalExpression, SizeCostEstimator, BinaryTruth, _> =
                 Prover::new(10000, SizeCostEstimator, goal_checker);
 
-            match prover.prove(&proposition) {
+            // Load Peano Arithmetic axioms as rewrite rules
+            let axiom_rules = axioms::pa_axiom_rules(&stores);
+            println!("Loaded {} axiom rules", axiom_rules.len());
+            for rule in &axiom_rules {
+                println!("  - {}", rule.name);
+            }
+            prover.add_rules(axiom_rules);
+            println!();
+
+            match prover.prove(&stores.storage, proposition) {
                 Some(_) => {
                     println!("");
                     println!("✓ Theorem proved!");

@@ -108,6 +108,11 @@ impl<
         self.rules.push(rule);
     }
 
+    /// Add multiple rewrite rules to this prover.
+    pub fn add_rules(&mut self, rules: impl IntoIterator<Item = RewriteRule<Node>>) {
+        self.rules.extend(rules);
+    }
+
     /// Attempt to prove a statement by rewriting it until a goal is reached.
     ///
     /// Uses A* search to explore possible rewrites. Returns `Some(ProofResult)`
@@ -153,21 +158,25 @@ impl<
             visited.insert(key);
 
             for rule in self.rules.iter() {
-                for successor in state.expr.value.as_ref().get_recursive_rewrites(store) {
-                    println!("Successor: {}", successor);
+                // Try to apply this rule to the current expression (including recursive rewrites)
+                let rewrites = rule.apply_recursive(&state.expr, store);
+                println!("Rule {} generated {} rewrites for {}", rule.name, rewrites.len(), state.expr);
+                for rewritten in rewrites {
+                    println!("  -> {}", rewritten);
+                    let cost = self.cost_estimator.estimate_cost(&rewritten);
 
                     heap.push(ProofState {
-                        expr: successor.clone(),
+                        expr: rewritten.clone(),
                         steps: {
                             let mut new_steps = state.steps.clone();
                             new_steps.push(ProofStep {
                                 rule_name: rule.name.clone(),
                                 old_expr: state.expr.clone(),
-                                new_expr: successor.clone(),
+                                new_expr: rewritten,
                             });
                             new_steps
                         },
-                        estimated_cost: self.cost_estimator.estimate_cost(&successor),
+                        estimated_cost: cost,
                     });
                 }
             }

@@ -56,4 +56,14 @@ impl<Node: Rewritable> RewriteRule<Node> {
         term.value.as_ref()
             .try_rewrite(&self.pattern, &self.replacement, store)
     }
+
+    /// Apply this rule to a term, returning both top-level and recursive rewrites.
+    pub fn apply_recursive(
+        &self,
+        term: &HashNode<Node>,
+        store: &Node::Storage,
+    ) -> Vec<HashNode<Node>> {
+        term.value.as_ref()
+            .get_recursive_rewrites(&self.pattern, &self.replacement, store)
+    }
 }

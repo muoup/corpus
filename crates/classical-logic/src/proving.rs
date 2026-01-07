@@ -115,10 +115,15 @@ where
     D: DomainContent + Clone,
 {
     fn check(&self, theorem: &HashNode<ClassicalLogicalExpression<D>>) -> Option<BinaryTruth> {
-        if let ClassicalLogicalExpression::BooleanConstant(truth) = theorem.value.as_ref() {
-            return Some(*truth);
-        }
+        match theorem.value.as_ref() {
+            // Trivial cases
+            ClassicalLogicalExpression::BooleanConstant(truth) => Some(*truth),
 
-        return None;
+            // Reflexivity: x = x is always true
+            ClassicalLogicalExpression::Equals(l, r) if l.hash() == r.hash() => Some(BinaryTruth::True),
+
+            // Other cases - return None to indicate unknown
+            _ => None,
+        }
     }
 }

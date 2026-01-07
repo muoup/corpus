@@ -216,50 +216,47 @@ impl<'a> PeanoParser<'a> {
                 let left = self.parse_parenthesized(storage, Self::parse_proposition)?;
                 let right = self.parse_parenthesized(storage, Self::parse_proposition)?;
                 let logical_expr = ClassicalLogicalExpression::And(left, right);
-                let logical_node = HashNode::from_store(logical_expr, &storage.logical_store);
+                let logical_node = HashNode::from_store(logical_expr, &storage.storage.logical_storage);
                 Ok(logical_node)
             }
             Token::Or => {
                 let left = self.parse_parenthesized(storage, Self::parse_proposition)?;
                 let right = self.parse_parenthesized(storage, Self::parse_proposition)?;
                 let logical_expr = ClassicalLogicalExpression::Or(left, right);
-                let logical_node = HashNode::from_store(logical_expr, &storage.logical_store);
+                let logical_node = HashNode::from_store(logical_expr, &storage.storage.logical_storage);
                 Ok(logical_node)
             }
             Token::Implies => {
                 let left = self.parse_parenthesized(storage, Self::parse_proposition)?;
                 let right = self.parse_parenthesized(storage, Self::parse_proposition)?;
                 let logical_expr = ClassicalLogicalExpression::Imply(left, right);
-                let logical_node = HashNode::from_store(logical_expr, &storage.logical_store);
+                let logical_node = HashNode::from_store(logical_expr, &storage.storage.logical_storage);
                 Ok(logical_node)
             }
             Token::Not => {
                 let inner = self.parse_parenthesized(storage, Self::parse_proposition)?;
                 let logical_expr = ClassicalLogicalExpression::Not(inner);
-                let logical_node = HashNode::from_store(logical_expr, &storage.logical_store);
+                let logical_node = HashNode::from_store(logical_expr, &storage.storage.logical_storage);
                 Ok(logical_node)
             }
             Token::Forall => {
                 let inner = self.parse_parenthesized(storage, Self::parse_proposition)?;
                 let logical_expr = ClassicalLogicalExpression::ForAll(inner);
-                let logical_node = HashNode::from_store(logical_expr, &storage.logical_store);
+                let logical_node = HashNode::from_store(logical_expr, &storage.storage.logical_storage);
                 Ok(logical_node)
             }
             Token::Exists => {
                 let inner = self.parse_parenthesized(storage, Self::parse_proposition)?;
                 let logical_expr = ClassicalLogicalExpression::Exists(inner);
-                let logical_node = HashNode::from_store(logical_expr, &storage.logical_store);
+                let logical_node = HashNode::from_store(logical_expr, &storage.storage.logical_storage);
                 Ok(logical_node)
             }
             Token::Eq => {
                 let left = self.parse_parenthesized(storage, Self::parse_arithmetic_expr)?;
                 let right = self.parse_parenthesized(storage, Self::parse_arithmetic_expr)?;
-                let content_node = HashNode::from_store(
-                    ClassicalLogicalExpression::Equals(left, right),
-                    &storage.content_store,
-                );
-                let logical_expr = ClassicalLogicalExpression::atomic(content_node);
-                let logical_node = HashNode::from_store(logical_expr, &storage.logical_store);
+                // Directly create Equals expression without atomic() wrapper
+                let logical_expr = ClassicalLogicalExpression::Equals(left, right);
+                let logical_node = HashNode::from_store(logical_expr, &storage.storage.logical_storage);
                 Ok(logical_node)
             }
             _ => Err(format!(
@@ -285,23 +282,23 @@ impl<'a> PeanoParser<'a> {
                 let left = self.parse_parenthesized(storage, Self::parse_arithmetic_expr)?;
                 let right = self.parse_parenthesized(storage, Self::parse_arithmetic_expr)?;
                 let expr = PeanoArithmeticExpression::Add(left, right);
-                Ok(HashNode::from_store(expr, &storage.arithmetic_store))
+                Ok(HashNode::from_store(expr, &storage.storage.domain_storage))
             }
             Token::Successor => {
                 self.tokens.next();
                 let inner = self.parse_parenthesized(storage, Self::parse_arithmetic_expr)?;
                 let expr = PeanoArithmeticExpression::Successor(inner);
-                Ok(HashNode::from_store(expr, &storage.arithmetic_store))
+                Ok(HashNode::from_store(expr, &storage.storage.domain_storage))
             }
             Token::Number(n) => {
                 self.tokens.next();
                 let expr = PeanoArithmeticExpression::Number(n);
-                Ok(HashNode::from_store(expr, &storage.arithmetic_store))
+                Ok(HashNode::from_store(expr, &storage.storage.domain_storage))
             }
             Token::DeBruijn(n) => {
                 self.tokens.next();
                 let expr = PeanoArithmeticExpression::DeBruijn(n);
-                Ok(HashNode::from_store(expr, &storage.arithmetic_store))
+                Ok(HashNode::from_store(expr, &storage.storage.domain_storage))
             }
             _ => Err(format!(
                 "Unexpected token {:?} for start of Expression",
