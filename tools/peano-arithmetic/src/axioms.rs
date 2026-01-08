@@ -3,8 +3,20 @@
 //! This module defines PA axioms as concise string declarations that are
 //! parsed into rewrite rules.
 
-use crate::{PeanoStores, parsing::PeanoParser, syntax::PeanoLogicalExpression};
-use corpus_core::rewriting::{RewriteRule, patterns::AsRewriteRules};
+use crate::{
+    PeanoStores,
+    parsing::PeanoParser,
+    syntax::{PeanoArithmeticExpression, PeanoArithmeticPattern, PeanoLogicalExpression},
+};
+use corpus_classical_logic::BinaryTruth;
+use corpus_core::{
+    RewriteDirection,
+    nodes::Hashing,
+    rewriting::{
+        RewriteRule,
+        patterns::{AsRewriteRules, Rewritable},
+    },
+};
 
 struct AxiomFormat {
     name: &'static str,
@@ -44,13 +56,17 @@ pub fn pa_axiom_rules(stores: &PeanoStores) -> Vec<RewriteRule<PeanoLogicalExpre
             name: "axiom2_symmetry",
             content: "FORALL (FORALL (IMPLIES (EQ (/0) (/1)) (EQ (/1) (/0))))",
         },
+        // Additive identity: if x + 0 = y, then x = y
+        // Pattern: EQ(PLUS(x, 0), y) -> Replacement: EQ(x, y)
         AxiomFormat {
             name: "axiom3_additive_identity",
-            content: "FORALL (EQ (PLUS (/0) (0)) (/0))",
+            content: "FORALL (FORALL (IMPLIES (EQ (PLUS (/0) (0)) (/1)) (EQ (/0) (/1))))",
         },
+        // Additive successor: if x + S(y) = z, then S(x + y) = z
+        // Pattern: EQ(PLUS(x, S(y)), z) -> Replacement: EQ(S(PLUS(x, y)), z)
         AxiomFormat {
             name: "axiom4_additive_successor",
-            content: "FORALL (FORALL (EQ (PLUS (/0) (S (/1))) (S (PLUS (/0) (/1)))))",
+            content: "FORALL (FORALL (FORALL (IMPLIES (EQ (PLUS (/0) (S (/1))) (/2)) (EQ (S (PLUS (/0) (/1))) (/2)))))",
         },
     ];
 
@@ -66,9 +82,75 @@ pub(crate) fn generate_axiom_rewrites(
     stores: &PeanoStores,
 ) -> Vec<RewriteRule<PeanoLogicalExpression>> {
     let parsed = PeanoParser::parse(axiom_content, stores).expect("Parsing failed");
-    let pattern = parsed
+    let mut pattern = parsed
         .value
         .decompose_to_rewrite_rules(axiom_name, &stores.storage);
-    
+
+    let truthy_pattern = parsed.value.decompose_to_pattern(&stores.storage);
+    let truth =
+        PeanoLogicalExpression::BooleanConstant(BinaryTruth::True).decompose_to_pattern(&stores.storage);
+
+    pattern.push(RewriteRule::new(
+        axiom_name,
+        truthy_pattern,
+        truth,
+        RewriteDirection::Forward,
+    ));
+
     pattern
+}
+
+/// Generate arithmetic rewrite rules for Peano Arithmetic.
+///
+/// These rules rewrite arithmetic expressions independently of domain context.
+/// They are applied to the operands of equality expressions during recursive rewriting.
+///
+/// # Rules
+///
+/// 1. **Additive identity**: `x + 0 -> x`
+/// 2. **Additive successor**: `x + S(y) -> S(x + y)`
+///
+/// # Examples
+///
+/// When proving `EQ (S(PLUS (0) (0))) (S (0))`:
+/// - The arithmetic rules are applied to the left operand `S(PLUS (0) (0))`
+/// - `PLUS (0) (0)` rewrites to `0` (additive identity)
+/// - Result: `S(0)`, which equals the right side `S(0)`
+pub fn pa_arithmetic_rules() -> Vec<RewriteRule<PeanoArithmeticExpression>> {
+    use PeanoArithmeticPattern::*;
+
+    vec![
+        // Additive identity: x + 0 -> x
+        RewriteRule::new(
+            "arithmetic_additive_identity",
+            Compound {
+                opcode: Hashing::opcode("add"),
+                args: vec![Variable(0), Literal(0)],
+            },
+            Variable(0),
+            RewriteDirection::Forward,
+        ),
+        // Additive successor: x + S(y) -> S(x + y)
+        RewriteRule::new(
+            "arithmetic_additive_successor",
+            Compound {
+                opcode: Hashing::opcode("add"),
+                args: vec![
+                    Variable(0),
+                    Compound {
+                        opcode: Hashing::opcode("successor"),
+                        args: vec![Variable(1)],
+                    },
+                ],
+            },
+            Compound {
+                opcode: Hashing::opcode("successor"),
+                args: vec![Compound {
+                    opcode: Hashing::opcode("add"),
+                    args: vec![Variable(0), Variable(1)],
+                }],
+            },
+            RewriteDirection::Forward,
+        ),
+    ]
 }

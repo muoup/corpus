@@ -17,7 +17,7 @@ fn main() {
     println!("Parsing theorem: {}", theorem);
 
     let mut parser = PeanoParser::new(theorem);
-    let stores = peano_arithmetic::PeanoStores::new();
+    let mut stores = peano_arithmetic::PeanoStores::new();
     
     match parser.parse_proposition(&stores) {
         Ok(proposition) => {
@@ -31,19 +31,31 @@ fn main() {
             let mut prover: Prover<PeanoLogicalExpression, SizeCostEstimator, BinaryTruth, _> =
                 Prover::new(10000, SizeCostEstimator, goal_checker);
 
+            // Load arithmetic rewrite rules into storage
+            let arithmetic_rules = axioms::pa_arithmetic_rules();
+            for rule in arithmetic_rules {
+                stores.pa_storage_mut().add_arithmetic_rule(rule);
+            }
+
             // Load Peano Arithmetic axioms as rewrite rules
             let axiom_rules = axioms::pa_axiom_rules(&stores);
-            println!("Loaded {} axiom rules", axiom_rules.len());
-            for rule in &axiom_rules {
-                println!("  - {}", rule.name);
-            }
             prover.add_rules(axiom_rules);
             println!();
 
             match prover.prove(&stores.storage, proposition) {
-                Some(_) => {
-                    println!("");
+                Some(result) => {
+                    println!();
                     println!("✓ Theorem proved!");
+
+                    // Print the rewrite path
+                    println!();
+                    println!("Proof path:");
+                    for (i, step) in result.steps.iter().enumerate() {
+                        println!("  {}. {} → {}  [{}]", i + 1, step.old_expr, step.new_expr, step.rule_name);
+                    }
+
+                    // Show final truth result
+                    println!("  → {:?}  [Goal reached]", result.truth_result);
                 }
                 None => {
                     println!();

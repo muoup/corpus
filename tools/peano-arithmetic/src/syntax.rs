@@ -4,17 +4,27 @@ use std::collections::HashMap;
 use corpus_classical_logic::{ClassicalLogicalExpression, DomainContent};
 use corpus_core::{NodeStorage, nodes::{HashNode, HashNodeInner, Hashing}, rewriting::patterns::Rewritable};
 
+use crate::PeanoStorage;
+
 // NOTE: PeanoExpression (DomainExpression) has been removed as DomainExpression
 // is no longer in the core crate. Domain-specific expressions should use
 // ClassicalLogicalExpression directly.
 
 /// Logical expression type for Peano Arithmetic with full first-order logic support.
-/// This wraps PeanoContent in ClassicalLogicalExpression to enable quantifiers (∀, ∃) and
+/// This wraps PeanoDomainExpression in ClassicalLogicalExpression to enable quantifiers (∀, ∃) and
 /// mixed logical operators (→, ∧, ∨, ¬, ↔).
-pub type PeanoLogicalExpression = ClassicalLogicalExpression<PeanoArithmeticExpression>;
+pub type PeanoLogicalExpression = ClassicalLogicalExpression<PeanoDomainExpression>;
 
 /// Hash node containing a Peano logical expression.
 pub type PeanoLogicalNode = HashNode<PeanoLogicalExpression>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PeanoDomainExpression {
+    Equality(
+        HashNode<PeanoArithmeticExpression>,
+        HashNode<PeanoArithmeticExpression>,
+    ),
+}
 
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
@@ -28,7 +38,21 @@ pub enum PeanoArithmeticExpression {
     DeBruijn(u32),
 }
 
-impl DomainContent for PeanoArithmeticExpression {}
+impl HashNodeInner for PeanoDomainExpression {
+    fn hash(&self) -> u64 {
+        match self {
+            PeanoDomainExpression::Equality(l, r) => {
+                Hashing::root_hash(1, &[Hashing::opcode("EQUALITY"), l.hash(), r.hash()])
+            }
+        }
+    }
+
+    fn size(&self) -> u64 {
+        match self {
+            PeanoDomainExpression::Equality(l, r) => 1 + l.size() + r.size(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PeanoArithmeticPattern {
@@ -37,6 +61,30 @@ pub enum PeanoArithmeticPattern {
     Literal(u64),
     Compound { opcode: u64, args: Vec<PeanoArithmeticPattern> },
 }
+
+/// Pattern type for Peano domain-level expressions (e.g., Equality).
+#[derive(Debug, Clone, PartialEq)]
+pub enum PeanoDomainPattern {
+    Equality(PeanoArithmeticPattern, PeanoArithmeticPattern),
+}
+
+impl HashNodeInner for PeanoDomainPattern {
+    fn hash(&self) -> u64 {
+        match self {
+            PeanoDomainPattern::Equality(l, r) => {
+                Hashing::root_hash(1, &[Hashing::opcode("EQUALITY"), l.hash(), r.hash()])
+            }
+        }
+    }
+
+    fn size(&self) -> u64 {
+        match self {
+            PeanoDomainPattern::Equality(l, r) => 1 + l.size() + r.size(),
+        }
+    }
+}
+
+impl DomainContent for PeanoDomainExpression {}
 
 /// Substitution mapping De Bruijn indices to expressions.
 type Substitution = HashMap<u32, HashNode<PeanoArithmeticExpression>>;
@@ -125,19 +173,19 @@ impl Rewritable for PeanoArithmeticExpression {
     
     fn decompose_to_pattern(
         &self,
-        _store: &Self::Storage,
+        store: &Self::Storage,
     ) -> Self::AsPattern {
         match self {
-            PeanoArithmeticExpression::Add(_, _) => PeanoArithmeticPattern::Compound {
+            PeanoArithmeticExpression::Add(l, r) => PeanoArithmeticPattern::Compound {
                 opcode: Hashing::opcode("add"),
                 args: vec![
-                    PeanoArithmeticPattern::Wildcard,
-                    PeanoArithmeticPattern::Wildcard,
+                    l.value.decompose_to_pattern(store),
+                    r.value.decompose_to_pattern(store),
                 ],
             },
-            PeanoArithmeticExpression::Successor(_) => PeanoArithmeticPattern::Compound {
+            PeanoArithmeticExpression::Successor(inner) => PeanoArithmeticPattern::Compound {
                 opcode: Hashing::opcode("successor"),
-                args: vec![PeanoArithmeticPattern::Wildcard],
+                args: vec![inner.value.decompose_to_pattern(store)],
             },
             PeanoArithmeticExpression::Number(n) => PeanoArithmeticPattern::Literal(*n),
             PeanoArithmeticExpression::DeBruijn(idx) => PeanoArithmeticPattern::Variable(*idx),
@@ -159,11 +207,11 @@ impl Rewritable for PeanoArithmeticExpression {
 
     fn get_recursive_rewrites(&self, from: &Self::AsPattern, to: &Self::AsPattern, store: &Self::Storage) -> Vec<HashNode<Self>> {
         let mut results = Vec::new();
-        
+
         if let Some(rewrite) = self.try_rewrite(from, to, store) {
             results.push(rewrite);
         }
-        
+
         match self {
             PeanoArithmeticExpression::Add(l, r) => {
                 // Get rewrites from left side and wrap them back in Add
@@ -173,7 +221,7 @@ impl Rewritable for PeanoArithmeticExpression {
                         store,
                     ));
                 }
-                
+
                 // Get rewrites from right side and wrap them back in Add
                 for right_rewrite in r.value.get_recursive_rewrites(from, to, store) {
                     results.push(HashNode::from_store(
@@ -193,7 +241,93 @@ impl Rewritable for PeanoArithmeticExpression {
             }
             PeanoArithmeticExpression::Number(_) | PeanoArithmeticExpression::DeBruijn(_) => {}
         }
-        
+
+        results
+    }
+}
+
+impl Rewritable for PeanoDomainExpression {
+    type AsPattern = PeanoDomainPattern;
+    type Storage = PeanoStorage;
+
+    fn decompose_to_pattern(&self, store: &Self::Storage) -> Self::AsPattern {
+        match self {
+            PeanoDomainExpression::Equality(l, r) => {
+                PeanoDomainPattern::Equality(
+                    l.value.decompose_to_pattern(&store.arithmetic_storage),
+                    r.value.decompose_to_pattern(&store.arithmetic_storage),
+                )
+            }
+        }
+    }
+
+    fn try_rewrite(&self, from: &Self::AsPattern, to: &Self::AsPattern, store: &Self::Storage) -> Option<HashNode<Self>> {
+        match (from, to) {
+            (PeanoDomainPattern::Equality(from_l, from_r), PeanoDomainPattern::Equality(to_l, to_r)) => {
+                match self {
+                    PeanoDomainExpression::Equality(l, r) => {
+                        let l_subst = match_pattern(l, from_l, &store.arithmetic_storage)?;
+                        let r_subst = match_pattern(r, from_r, &store.arithmetic_storage)?;
+
+                        // Merge substitutions, checking for conflicts
+                        let mut subst = l_subst;
+                        for (key, value) in r_subst {
+                            // If variable exists in both substitutions, values must match
+                            if let Some(existing) = subst.get(&key) {
+                                if existing != &value {
+                                    return None;  // Conflict: variable has different values
+                                }
+                            } else {
+                                subst.insert(key, value);
+                            }
+                        }
+
+                        // Apply substitution to patterns
+                        let new_l = apply_substitution(to_l, &subst, &store.arithmetic_storage)?;
+                        let new_r = apply_substitution(to_r, &subst, &store.arithmetic_storage)?;
+
+                        Some(HashNode::from_store(
+                            PeanoDomainExpression::Equality(new_l, new_r),
+                            &store.domain_content_storage,
+                        ))
+                    }
+                }
+            }
+        }
+    }
+
+    fn get_recursive_rewrites(&self, from: &Self::AsPattern, to: &Self::AsPattern, store: &Self::Storage) -> Vec<HashNode<Self>> {
+        let mut results = Vec::new();
+
+        // Try rewriting at this level (domain-level pattern matching)
+        if let Some(rewrite) = self.try_rewrite(from, to, store) {
+            results.push(rewrite);
+        }
+
+        // Recursively rewrite arithmetic operands using arithmetic rules
+        // When we have an equality like EQ (S(0 + 0)) (S(0)), we need to rewrite
+        // the arithmetic expressions inside (0 + 0 -> 0) before checking equality.
+        let PeanoDomainExpression::Equality(l, r) = self;
+        // Apply all arithmetic rules to the left operand
+        for rule in store.arithmetic_rules.iter() {
+            for left_rewrite in rule.apply_recursive(l, &store.arithmetic_storage) {
+                results.push(HashNode::from_store(
+                    PeanoDomainExpression::Equality(left_rewrite, r.clone()),
+                    &store.domain_content_storage,
+                ));
+            }
+        }
+
+        // Apply all arithmetic rules to the right operand
+        for rule in store.arithmetic_rules.iter() {
+            for right_rewrite in rule.apply_recursive(r, &store.arithmetic_storage) {
+                results.push(HashNode::from_store(
+                    PeanoDomainExpression::Equality(l.clone(), right_rewrite),
+                    &store.domain_content_storage,
+                ));
+            }
+        }
+
         results
     }
 }
@@ -205,6 +339,14 @@ impl fmt::Display for PeanoArithmeticExpression {
             PeanoArithmeticExpression::Successor(inner) => write!(f, "S({})", inner),
             PeanoArithmeticExpression::Number(n) => write!(f, "{}", n),
             PeanoArithmeticExpression::DeBruijn(idx) => write!(f, "/{}", idx),
+        }
+    }
+}
+
+impl fmt::Display for PeanoDomainExpression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PeanoDomainExpression::Equality(left, right) => write!(f, "EQ {} {}", left, right),
         }
     }
 }

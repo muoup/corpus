@@ -32,8 +32,8 @@ pub enum ClassicalLogicalExpression<D: DomainContent> {
     Iff(HashNode<Self>, HashNode<Self>),
     ForAll(HashNode<Self>),
     Exists(HashNode<Self>),
-    Equals(HashNode<D>, HashNode<D>),
 
+    DomainContent(HashNode<D>),
     BooleanConstant(BinaryTruth),
 
     #[allow(non_camel_case_types)]
@@ -70,15 +70,7 @@ impl<D: DomainContent> ClassicalLogicalExpression<D> {
             Self::Exists(operand) => Some(vec![operand.clone()]),
 
             Self::BooleanConstant(_) => Some(vec![]),
-            Self::_phantom(..) | Self::Equals(..) => None,
-        }
-    }
-
-    pub fn domain_operands(&self) -> Option<Vec<HashNode<D>>> {
-        match self {
-            Self::Equals(left, right) => Some(vec![left.clone(), right.clone()]),
-
-            _ => None,
+            Self::_phantom(..) | Self::DomainContent(..) => None,
         }
     }
 }
@@ -86,8 +78,8 @@ impl<D: DomainContent> ClassicalLogicalExpression<D> {
 impl<D: DomainContent> HashNodeInner for ClassicalLogicalExpression<D> {
     fn hash(&self) -> u64 {
         match self {
-            Self::Equals(left, right) => {
-                let all_hashes = vec![Hashing::opcode("DOMAIN"), left.hash(), right.hash()];
+            Self::DomainContent(content) => {
+                let all_hashes = vec![Hashing::opcode("DOMAIN"), content.hash()];
                 Hashing::root_hash(1, &all_hashes)
             }
 
@@ -141,7 +133,7 @@ impl<D: DomainContent> HashNodeInner for ClassicalLogicalExpression<D> {
         match self {
             Self::BooleanConstant(_) => 1,
 
-            Self::Equals(lhs, rhs) => 1 + lhs.size() + rhs.size(),
+            Self::DomainContent(d) => d.size(),
 
             Self::And(left, right)
             | Self::Or(left, right)
@@ -170,8 +162,10 @@ where
             Self::Iff(l, r) => write!(f, "({} ↔ {})", l, r),
             Self::ForAll(x) => write!(f, "∀{}", x),
             Self::Exists(x) => write!(f, "∃{}", x),
-            Self::Equals(l, r) => write!(f, "({} = {})", l, r),
+
             Self::BooleanConstant(b) => write!(f, "{}", b),
+            Self::DomainContent(d) => write!(f, "{}", d),
+
             Self::_phantom() => write!(f, "_"),
         }
     }

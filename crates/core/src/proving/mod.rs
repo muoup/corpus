@@ -160,9 +160,9 @@ impl<
             for rule in self.rules.iter() {
                 // Try to apply this rule to the current expression (including recursive rewrites)
                 let rewrites = rule.apply_recursive(&state.expr, store);
-                println!("Rule {} generated {} rewrites for {}", rule.name, rewrites.len(), state.expr);
+                // println!("Rule {} generated {} rewrites for {}", rule.name, rewrites.len(), state.expr);
                 for rewritten in rewrites {
-                    println!("  -> {}", rewritten);
+                    // println!("  -> {}", rewritten);
                     let cost = self.cost_estimator.estimate_cost(&rewritten);
 
                     heap.push(ProofState {

@@ -112,17 +112,15 @@ impl ClassicalTruthChecker {
 
 impl<'a, D> GoalChecker<ClassicalLogicalExpression<D>, BinaryTruth> for ClassicalTruthChecker
 where
-    D: DomainContent + Clone,
+    D: DomainContent + Clone + PartialEq,
 {
     fn check(&self, theorem: &HashNode<ClassicalLogicalExpression<D>>) -> Option<BinaryTruth> {
         match theorem.value.as_ref() {
-            // Trivial cases
+            // One main observation of classical logic is maybe best summarized as:
+            // "Things which are true, are true; and things which are false, are false."
             ClassicalLogicalExpression::BooleanConstant(truth) => Some(*truth),
 
-            // Reflexivity: x = x is always true
-            ClassicalLogicalExpression::Equals(l, r) if l.hash() == r.hash() => Some(BinaryTruth::True),
-
-            // Other cases - return None to indicate unknown
+            // Otherwise who's to say
             _ => None,
         }
     }

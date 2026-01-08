@@ -5,7 +5,7 @@ use corpus_core::nodes::HashNode;
 
 use crate::{
     PeanoStores,
-    syntax::{PeanoArithmeticExpression, PeanoLogicalExpression},
+    syntax::{PeanoArithmeticExpression, PeanoDomainExpression, PeanoLogicalExpression},
 };
 
 #[derive(Debug, PartialEq, Clone)]
@@ -254,8 +254,13 @@ impl<'a> PeanoParser<'a> {
             Token::Eq => {
                 let left = self.parse_parenthesized(storage, Self::parse_arithmetic_expr)?;
                 let right = self.parse_parenthesized(storage, Self::parse_arithmetic_expr)?;
-                // Directly create Equals expression without atomic() wrapper
-                let logical_expr = ClassicalLogicalExpression::Equals(left, right);
+
+                // Create domain-level Equality expression
+                let domain_expr = PeanoDomainExpression::Equality(left, right);
+                let domain_node = HashNode::from_store(domain_expr, &storage.pa_storage().domain_content_storage);
+
+                // Wrap in DomainContent to create a logical expression
+                let logical_expr = ClassicalLogicalExpression::DomainContent(domain_node);
                 let logical_node = HashNode::from_store(logical_expr, &storage.storage.logical_storage);
                 Ok(logical_node)
             }
@@ -282,23 +287,23 @@ impl<'a> PeanoParser<'a> {
                 let left = self.parse_parenthesized(storage, Self::parse_arithmetic_expr)?;
                 let right = self.parse_parenthesized(storage, Self::parse_arithmetic_expr)?;
                 let expr = PeanoArithmeticExpression::Add(left, right);
-                Ok(HashNode::from_store(expr, &storage.storage.domain_storage))
+                Ok(HashNode::from_store(expr, &storage.pa_storage().arithmetic_storage))
             }
             Token::Successor => {
                 self.tokens.next();
                 let inner = self.parse_parenthesized(storage, Self::parse_arithmetic_expr)?;
                 let expr = PeanoArithmeticExpression::Successor(inner);
-                Ok(HashNode::from_store(expr, &storage.storage.domain_storage))
+                Ok(HashNode::from_store(expr, &storage.pa_storage().arithmetic_storage))
             }
             Token::Number(n) => {
                 self.tokens.next();
                 let expr = PeanoArithmeticExpression::Number(n);
-                Ok(HashNode::from_store(expr, &storage.storage.domain_storage))
+                Ok(HashNode::from_store(expr, &storage.pa_storage().arithmetic_storage))
             }
             Token::DeBruijn(n) => {
                 self.tokens.next();
                 let expr = PeanoArithmeticExpression::DeBruijn(n);
-                Ok(HashNode::from_store(expr, &storage.storage.domain_storage))
+                Ok(HashNode::from_store(expr, &storage.pa_storage().arithmetic_storage))
             }
             _ => Err(format!(
                 "Unexpected token {:?} for start of Expression",
