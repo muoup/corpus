@@ -7,11 +7,9 @@ pub use base::*;
 
 // Re-export proving for convenience
 pub use proving::{
-    CostEstimator, GoalChecker, ProofResult, ProofState, ProofStep, Prover,
-    ReflexiveGoalChecker, SizeCostEstimator,
+    CostEstimator, GoalChecker, ProofResult, ProofState, ProofStep, Prover, ReflexiveGoalChecker,
+    SizeCostEstimator,
 };
 
 // Re-export rewriting for convenience
-pub use rewriting::{
-    Pattern, RewriteDirection, RewriteRule, Substitution, Unifiable, UnificationError,
-};
+pub use rewriting::{Pattern, RewriteDirection, RewriteRule};

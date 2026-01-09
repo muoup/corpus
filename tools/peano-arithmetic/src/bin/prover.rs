@@ -1,10 +1,15 @@
-use corpus_core::base::nodes::{HashNode, NodeStorage};
-use peano_arithmetic::parsing::Parser;
-use peano_arithmetic::prover::{prove_pa, ProofResultExt};
-use peano_arithmetic::syntax::{PeanoContent, PeanoExpression};
-use peano_arithmetic::axioms::peano_arithmetic_rules;
+use corpus_core::proving::{Prover, SizeCostEstimator};
+use corpus_classical_logic::{BinaryTruth, ClassicalTruthChecker};
+use log::{error, info};
+use peano_arithmetic::{axioms, parsing::PeanoParser, syntax::PeanoLogicalExpression};
 
 fn main() {
+    env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or("info"),
+    )
+    .format_timestamp_secs()
+    .init();
+
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 2 {
@@ -12,68 +17,58 @@ fn main() {
         println!();
         println!("Example: {} \"EQ (PLUS (S(0)) (0)) (S(0))\"", args[0]);
         println!();
-        println!("Theorem format: EQ (left) (right)");
-        println!("  left, right: Peano arithmetic expressions");
-        println!("  Operators: PLUS, S (successor), numbers (0, 1, 2, ...)");
-        println!("  Variables: /0, /1, /2, ... (De Bruijn indices)");
         std::process::exit(1);
     }
 
     let theorem = &args[1];
     println!("Parsing theorem: {}", theorem);
 
-    let mut parser = Parser::new(theorem);
-    match parser.parse_proposition() {
+    let mut parser = PeanoParser::new(theorem);
+    let stores = peano_arithmetic::PeanoStores::new();
+    
+    match parser.parse_proposition(&stores) {
         Ok(proposition) => {
-            println!("Parsed: {}", proposition);
+            println!("Theorem: {}", proposition);
             println!();
-
-            // Extract the PeanoContent (equality expression) from the DomainExpression
-            let peano_content = match extract_equality_content(proposition) {
-                Ok(content) => content,
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    std::process::exit(1);
-                }
-            };
-
-            println!("Theorem: {}", peano_content);
-            println!();
-
-            println!("Loading Peano axioms...");
-            let arithmetic_rules = peano_arithmetic_rules();
-            for rule in &arithmetic_rules {
-                println!("  - {}", rule.name);
-            }
-            println!();
-
-            // Create a NodeStorage for PeanoContent
-            let store = NodeStorage::new();
 
             println!("Searching for proof (max 10000 nodes)...");
-            match prove_pa(&peano_content, &store, 10000) {
+
+            // Create the prover with PeanoGoalChecker (axiom-based goal checking)
+            let goal_checker = ClassicalTruthChecker::new();
+            let mut prover: Prover<PeanoLogicalExpression, SizeCostEstimator, BinaryTruth, _> =
+                Prover::new(10000, SizeCostEstimator, goal_checker);
+
+            // Load Peano Arithmetic axioms as rewrite rules
+            let axiom_rules = axioms::pa_axiom_rules(&stores);
+            info!("Loaded {} rewrite rules", axiom_rules.len());
+            prover.add_rules(axiom_rules);
+            println!();
+
+            match prover.prove(&stores.storage, proposition) {
                 Some(result) => {
+                    match result.truth_result {
+                        BinaryTruth::True => println!("Theorem proven!"),
+                        BinaryTruth::False => println!("Theorem disproven!"),
+                    };
+
+                    // Print the rewrite path
                     println!();
-                    result.print();
+                    println!("Proof path:");
+                    for (i, step) in result.steps.iter().enumerate() {
+                        println!("  {}. {} → {}  [{}]", i + 1, step.old_expr, step.new_expr, step.rule_name);
+                    }
+
+                    // Show final truth result
+                    println!("  → {:?}  [Goal reached]", result.truth_result);
                 }
                 None => {
-                    println!();
-                    println!("✗ Could not prove theorem (reached limit)");
+                    println!("? No conclusion found (max search depth reached)");
                 }
             }
         }
         Err(e) => {
-            eprintln!("Parse error: {}", e);
+            error!("Parse error: {}", e);
             std::process::exit(1);
         }
-    }
-}
-
-fn extract_equality_content(
-    proposition: HashNode<PeanoExpression>,
-) -> Result<HashNode<PeanoContent>, String> {
-    match proposition.value.as_domain() {
-        Some(content) => Ok(content.clone()),
-        None => Err("Theorem must be an equality (EQ ...).".to_string()),
     }
 }

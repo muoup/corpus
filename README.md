@@ -39,6 +39,51 @@ cargo run --package peano-arithmetic --bin prover
 cargo test --workspace
 ```
 
+### Logging
+
+The project uses the `log` facade with `env_logger` for structured logging.
+
+#### Usage
+
+```bash
+# Default level (info, warnings, errors)
+cargo run --bin prover -- "theorem"
+
+# Enable debug logging
+RUST_LOG=debug cargo run --bin prover -- "theorem"
+
+# Enable trace logging (very detailed, includes all rewrite steps)
+RUST_LOG=trace cargo run --bin prover -- "theorem"
+
+# Filter to specific module
+RUST_LOG=corpus_core::proving=debug cargo run --bin prover -- "theorem"
+
+# Multiple modules with different levels
+RUST_LOG=corpus_core::proving=debug,corpus_core::rewriting=trace cargo run --bin prover -- "theorem"
+```
+
+#### Log Levels
+
+- `error`: Critical errors that prevent execution
+- `warn`: Non-critical issues and exhaustion conditions
+- `info`: High-level progress (proof start, success, milestones)
+- `debug`: Proof search progress, cost estimates, statistics
+- `trace`: Individual rule applications, pattern matches, parse steps
+
+#### Performance
+
+In release builds, `debug` and `trace` levels are compiled out via `log`'s level filtering, ensuring zero runtime overhead.
+
+#### File Logging
+
+`env_logger` supports file logging via configuration. Example for future use:
+```rust
+env_logger::Builder::new()
+    .target(env_logger::Target::Pipe(Box::new(File::create("app.log").unwrap())))
+    .init();
+```
+
+
 ## Overview of Components
 
 ### Core Crates

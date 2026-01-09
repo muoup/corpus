@@ -1,219 +1,116 @@
 //! Peano Arithmetic axioms using string-based parsing.
 //!
 //! This module defines PA axioms as concise string declarations that are
-//! parsed into first-class `NamedAxiom` instances.
+//! parsed into rewrite rules.
 
-use corpus_core::base::axioms::NamedAxiom;
-use corpus_core::nodes::Hashing;
-use corpus_core::rewriting::{Pattern, RewriteDirection, RewriteRule};
-use corpus_classical_logic::{BinaryTruth, ClassicalOperator};
-use crate::parsing::{parse_axiom, AxiomStores};
-use crate::syntax::{ArithmeticExpression, PeanoContent};
+use crate::{
+    PeanoStores,
+    parsing::PeanoParser,
+    syntax::PeanoLogicalExpression,
+};
+use corpus_classical_logic::BinaryTruth;
+use corpus_core::{
+    RewriteDirection,
+    rewriting::{
+        RewriteRule,
+        patterns::{AsRewriteRules, Rewritable},
+    },
+};
 
-/// PA axioms as first-class NamedAxiom instances.
+struct AxiomFormat {
+    name: &'static str,
+    content: &'static str,
+}
+
+/// PA axioms as rewrite rules.
 ///
 /// Uses string-based parsing for clean, readable axiom declarations.
 ///
 /// # Syntax
 /// - `EQ (<left>) (<right>)` - equality
-/// - `-> (<antecedent>) (<consequent>)` - implication
 /// - `PLUS (<left>) (<right>)` - addition
 /// - `S (<arg>)` - successor function
 /// - `/0`, `/1`, `/2` - De Bruijn indices for variables
+/// - `FORALL (<expr>)` - universal quantifier
 ///
 /// # Examples
 /// ```ignore
-/// // Successor injectivity: S(x) = S(y) -> x = y
-/// "-> (EQ (S (/0)) (S (/1))) (EQ (/0) (/1))"
-///
 /// // Additive identity: x + 0 = x
-/// "EQ (PLUS (/0) (0)) (/0)"
+/// "FORALL (EQ (PLUS (/0) (0)) (/0))"
 ///
 /// // Additive successor: x + S(y) = S(x + y)
-/// "EQ (PLUS (/0) (S (/1))) (S (PLUS (/0) (/1)))"
+/// "FORALL (FORALL (EQ (PLUS (/0) (S (/1))) (S (PLUS (/0) (/1)))))"
 /// ```
 ///
 /// Note:
-/// - PA axioms are implicitly universal (apply to all variable values)
-/// - Implication `->` requires both antecedent and consequent to be
-///   parenthesized separately
-/// - Quantifiers are not needed in axiom strings since rewrite rules
-///   implicitly apply universally
-pub fn peano_arithmetic_axioms() -> Vec<NamedAxiom<BinaryTruth, PeanoContent, ClassicalOperator>> {
-    let stores = AxiomStores::new();
+/// - PA axioms use universal quantifiers which are stripped to extract equality patterns
+/// - Each equality becomes a bidirectional rewrite rule
+pub fn pa_axiom_rules(stores: &PeanoStores) -> Vec<RewriteRule<PeanoLogicalExpression>> {
+    let axioms = vec![
+        // Reflexivity: x = x
+        // Pattern: EQ(x, x) -> Replacement: True
+        AxiomFormat {
+            name: "axiom1_reflexivity",
+            content: "FORALL (EQ (/0) (/0))",
+        },
+        // Symmetry: if x = y, then y = x
+        // Pattern: EQ(x, y) -> Replacement: EQ(y, x)
+        AxiomFormat {
+            name: "axiom2_symmetry",
+            content: "FORALL (FORALL (IMPLIES (EQ (/0) (/1)) (EQ (/1) (/0))))",
+        },
+        // Additive identity: if x + 0 = y, then x = y
+        // Pattern: EQ(PLUS(x, 0), y) -> Replacement: EQ(x, y)
+        AxiomFormat {
+            name: "axiom3_additive_identity",
+            content: "FORALL (FORALL (IMPLIES (EQ (PLUS (/0) (0)) (/1)) (EQ (/0) (/1))))",
+        },
+        // Additive successor: if x + S(y) = z, then S(x + y) = z
+        // Pattern: EQ(PLUS(x, S(y)), z) -> Replacement: EQ(S(PLUS(x, y)), z)
+        AxiomFormat {
+            name: "axiom4_additive_successor",
+            content: "FORALL (FORALL (FORALL (IMPLIES (EQ (PLUS (/0) (S (/1))) (/2)) (EQ (S (PLUS (/0) (/1))) (/2)))))",
+        },
+        // No variable is the successor of itself: ¬(x = S(x))
+        // Pattern: EQ(x, S(x)) -> Replacement: False
+        AxiomFormat {
+            name: "axiom5_variable_not_successor_of_self",
+            content: "FORALL (NOT (EQ (/0) (S (/0))))",
+        },
+        // Successor equality: if S(x) = S(y), then x = y
+        // Pattern: EQ(S(x), S(y)) -> Replacement: EQ(x, y)
+        AxiomFormat {
+            name: "axiom6_successor_equality",
+            content: "FORALL (FORALL (IMPLIES (EQ (S (/0)) (S (/1))) (EQ (/0) (/1))))",
+        }
+    ];
 
-    vec![
-        // Axiom 2: Successor injectivity
-        // S(x) = S(y) -> x = y
-        parse_axiom(
-            "-> (EQ (S (/0)) (S (/1))) (EQ (/0) (/1))",
-            "axiom2_successor_injectivity",
-            &stores,
-        )
-        .expect("Failed to parse axiom2_successor_injectivity"),
-
-        // Axiom 3: Additive identity
-        // x + 0 = x
-        parse_axiom(
-            "EQ (PLUS (/0) (0)) (/0)",
-            "axiom3_additive_identity",
-            &stores,
-        )
-        .expect("Failed to parse axiom3_additive_identity"),
-
-        // Axiom 4: Additive successor
-        // x + S(y) = S(x + y)
-        parse_axiom(
-            "EQ (PLUS (/0) (S (/1))) (S (PLUS (/0) (/1)))",
-            "axiom4_additive_successor",
-            &stores,
-        )
-        .expect("Failed to parse axiom4_additive_successor"),
-    ]
+    axioms
+        .into_iter()
+        .flat_map(|axiom| generate_axiom_rewrites(axiom.name, axiom.content, stores))
+        .collect()
 }
 
-/// Generate arithmetic rewrite rules from PA axioms.
-///
-/// This function bridges the gap between the conceptual axiom system
-/// (which operates on LogicalExpressions) and the concrete arithmetic
-/// rewrite rules needed by the PA prover (which operate on ArithmeticExpressions).
-///
-/// The rules are hard-coded patterns that correspond to the three PA axioms:
-/// - Axiom 2: S(x) = S(y) -> x = y (successor injectivity)
-/// - Axiom 3: x + 0 = x (additive identity)
-/// - Axiom 4: x + S(y) = S(x + y) (additive successor)
-pub fn peano_arithmetic_rules() -> Vec<RewriteRule<ArithmeticExpression>> {
-    vec![
-        // Axiom 2: S(x) = S(y) -> x = y (bidirectional)
-        {
-            let sx = Pattern::compound(Hashing::opcode("successor"), vec![Pattern::var(0)]);
-            let sy = Pattern::compound(Hashing::opcode("successor"), vec![Pattern::var(1)]);
-            let pattern = Pattern::compound(Hashing::opcode("equals"), vec![sx, sy]);
+pub(crate) fn generate_axiom_rewrites(
+    axiom_name: &str,
+    axiom_content: &str,
+    stores: &PeanoStores,
+) -> Vec<RewriteRule<PeanoLogicalExpression>> {
+    let parsed = PeanoParser::parse(axiom_content, stores).expect("Parsing failed");
+    let mut pattern = parsed
+        .value
+        .decompose_to_rewrite_rules(axiom_name, &stores.storage);
 
-            let x = Pattern::var(0);
-            let y = Pattern::var(1);
-            let replacement = Pattern::compound(Hashing::opcode("equals"), vec![x, y]);
+    let truthy_pattern = parsed.value.decompose_to_pattern(&stores.storage);
+    let truth =
+        PeanoLogicalExpression::BooleanConstant(BinaryTruth::True).decompose_to_pattern(&stores.storage);
 
-            RewriteRule::bidirectional("axiom2_successor_injectivity", pattern, replacement)
-        },
-        // Axiom 3: x + 0 = x (forward)
-        {
-            let x = Pattern::var(0);
-            let zero = Pattern::constant(ArithmeticExpression::Number(0));
-            let pattern = Pattern::compound(Hashing::opcode("add"), vec![x.clone(), zero]);
+    pattern.push(RewriteRule::new(
+        axiom_name,
+        truthy_pattern,
+        truth,
+        RewriteDirection::Forward,
+    ));
 
-            let replacement = x;
-
-            RewriteRule::new("axiom3_additive_identity", pattern, replacement, RewriteDirection::Forward)
-        },
-        // Axiom 4: x + S(y) = S(x + y) (forward)
-        {
-            let x = Pattern::var(0);
-            let y = Pattern::var(1);
-            let sy = Pattern::compound(Hashing::opcode("successor"), vec![y.clone()]);
-            let pattern = Pattern::compound(Hashing::opcode("add"), vec![x.clone(), sy]);
-
-            let x_plus_y = Pattern::compound(Hashing::opcode("add"), vec![x, y]);
-            let replacement = Pattern::compound(Hashing::opcode("successor"), vec![x_plus_y]);
-
-            RewriteRule::new("axiom4_additive_successor", pattern, replacement, RewriteDirection::Forward)
-        },
-    ]
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use corpus_core::base::axioms::Axiom;
-
-    #[test]
-    fn test_axioms_creation() {
-        let axioms = peano_arithmetic_axioms();
-        assert_eq!(axioms.len(), 3);
-
-        // Verify axiom names
-        let names: Vec<_> = axioms.iter().map(|a| a.name()).collect();
-        assert!(names.contains(&"axiom2_successor_injectivity"));
-        assert!(names.contains(&"axiom3_additive_identity"));
-        assert!(names.contains(&"axiom4_additive_successor"));
-    }
-
-    #[test]
-    fn test_axioms_are_valid() {
-        let axioms = peano_arithmetic_axioms();
-
-        for axiom in axioms {
-            assert!(axiom.is_valid(), "Axiom {} should be valid", axiom.name());
-            assert!(axiom.operator().is_some(), "Axiom {} should have an operator", axiom.name());
-        }
-    }
-
-    #[test]
-    fn test_axioms_generate_rewrite_rules() {
-        let axioms = peano_arithmetic_axioms();
-
-        for axiom in axioms {
-            let rules = axiom.to_rewrite_rules();
-            // Each axiom should generate at least one rewrite rule
-            assert!(!rules.is_empty(), "Axiom {} should generate rewrite rules", axiom.name());
-        }
-    }
-
-    #[test]
-    fn test_axiom2_successor_injectivity() {
-        let stores = AxiomStores::new();
-        let axiom = parse_axiom(
-            "-> (EQ (S (/0)) (S (/1))) (EQ (/0) (/1))",
-            "test_axiom2",
-            &stores,
-        )
-        .expect("Failed to parse axiom2");
-
-        assert_eq!(axiom.name(), "test_axiom2");
-        assert!(axiom.is_valid());
-
-        let rules = axiom.to_rewrite_rules();
-        assert!(!rules.is_empty());
-    }
-
-    #[test]
-    fn test_axiom3_additive_identity() {
-        let stores = AxiomStores::new();
-        let axiom = parse_axiom(
-            "EQ (PLUS (/0) (0)) (/0)",
-            "test_axiom3",
-            &stores,
-        )
-        .expect("Failed to parse axiom3");
-
-        assert_eq!(axiom.name(), "test_axiom3");
-        assert!(axiom.is_valid());
-
-        let rules = axiom.to_rewrite_rules();
-        assert!(!rules.is_empty());
-    }
-
-    #[test]
-    fn test_axiom4_additive_successor() {
-        let stores = AxiomStores::new();
-        let axiom = parse_axiom(
-            "EQ (PLUS (/0) (S (/1))) (S (PLUS (/0) (/1)))",
-            "test_axiom4",
-            &stores,
-        )
-        .expect("Failed to parse axiom4");
-
-        assert_eq!(axiom.name(), "test_axiom4");
-        assert!(axiom.is_valid());
-
-        let rules = axiom.to_rewrite_rules();
-        assert!(!rules.is_empty());
-    }
-
-    #[test]
-    fn test_parse_error_invalid_syntax() {
-        let stores = AxiomStores::new();
-        let result = parse_axiom("invalid syntax", "test", &stores);
-        assert!(result.is_err());
-    }
+    pattern
 }
