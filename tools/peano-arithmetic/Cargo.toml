@@ -6,3 +6,5 @@ edition = "2024"
 [dependencies]
 corpus-core = { path = "../../crates/core" }
 corpus-classical-logic = { path = "../../crates/classical-logic" }
+log = { workspace = true }
+env_logger = { workspace = true }

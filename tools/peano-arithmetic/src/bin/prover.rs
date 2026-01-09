@@ -1,8 +1,15 @@
 use corpus_core::proving::{Prover, SizeCostEstimator};
 use corpus_classical_logic::{BinaryTruth, ClassicalTruthChecker};
+use log::{error, info};
 use peano_arithmetic::{axioms, parsing::PeanoParser, syntax::PeanoLogicalExpression};
 
 fn main() {
+    env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or("info"),
+    )
+    .format_timestamp_secs()
+    .init();
+
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 2 {
@@ -33,16 +40,15 @@ fn main() {
 
             // Load Peano Arithmetic axioms as rewrite rules
             let axiom_rules = axioms::pa_axiom_rules(&stores);
+            info!("Loaded {} rewrite rules", axiom_rules.len());
             prover.add_rules(axiom_rules);
             println!();
 
             match prover.prove(&stores.storage, proposition) {
                 Some(result) => {
-                    println!();
-                    
                     match result.truth_result {
-                        BinaryTruth::True => println!("✓ Theorem proved!"),
-                        BinaryTruth::False => println!("✗ Theorem disproved!"),
+                        BinaryTruth::True => println!("Theorem proven!"),
+                        BinaryTruth::False => println!("Theorem disproven!"),
                     };
 
                     // Print the rewrite path
@@ -56,13 +62,12 @@ fn main() {
                     println!("  → {:?}  [Goal reached]", result.truth_result);
                 }
                 None => {
-                    println!();
                     println!("? No conclusion found (max search depth reached)");
                 }
             }
         }
         Err(e) => {
-            eprintln!("Parse error: {}", e);
+            error!("Parse error: {}", e);
             std::process::exit(1);
         }
     }

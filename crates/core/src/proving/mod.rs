@@ -7,6 +7,7 @@ use crate::base::nodes::{HashNode, HashNodeInner};
 use crate::rewriting::RewriteRule;
 use crate::rewriting::patterns::Rewritable;
 use crate::{BinaryTruth, TruthValue};
+use log::{debug, info, trace, warn};
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashSet};
 use std::fmt::Display;
@@ -122,11 +123,15 @@ impl<
         store: &Node::Storage,
         initial_expr: HashNode<Node>,
     ) -> Option<ProofResult<Node, T>> {
+        debug!("Starting proof search with max_nodes={}", self.max_nodes);
+
         let mut heap = BinaryHeap::new();
         let mut visited = HashSet::new();
         let mut nodes_explored = 0usize;
 
         let initial_cost = self.cost_estimator.estimate_cost(None, &initial_expr);
+        debug!("Initial cost: {}", initial_cost);
+
         let initial_state = ProofState {
             expr: initial_expr,
             steps: Vec::new(),
@@ -138,11 +143,16 @@ impl<
         while let Some(state) = heap.pop() {
             nodes_explored += 1;
 
+            if nodes_explored % 1000 == 0 {
+                debug!("Explored {}/{} nodes", nodes_explored, self.max_nodes);
+            }
+
             if nodes_explored > self.max_nodes {
                 return None;
             }
 
             if let Some(truth) = self.goal_checker.check(&state.expr) {
+                info!("Goal reached! Exploring expression: {}", state.expr);
                 return Some(ProofResult {
                     steps: state.steps,
                     nodes_explored,
@@ -153,18 +163,18 @@ impl<
 
             let key = state.expr.hash();
             if visited.contains(&key) {
+                trace!("Skipping already-visited expression (hash: {:x})", key);
                 continue;
             }
             visited.insert(key);
 
             for rule in self.rules.iter() {
-                // Try to apply this rule to the current expression (including recursive rewrites)
+                trace!("Applying rule: {}", rule.name);
                 let rewrites = rule.apply_recursive(&state.expr, store);
-                // if !rewrites.is_empty() {
-                //     println!("Rule {} generated {} rewrites for {}", rule.name, rewrites.len(), state.expr);
-                // }
+                if !rewrites.is_empty() {
+                    trace!("Rule {} generated {} rewrites for {}", rule.name, rewrites.len(), state.expr);
+                }
                 for rewritten in rewrites {
-                    // println!("  -> {}", rewritten);
                     let cost = self.cost_estimator.estimate_cost(Some(&state), &rewritten);
 
                     heap.push(ProofState {
@@ -184,6 +194,7 @@ impl<
             }
         }
 
+        warn!("Proof search exhausted: explored {} nodes", nodes_explored);
         None
     }
 }

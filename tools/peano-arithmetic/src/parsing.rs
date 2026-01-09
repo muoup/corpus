@@ -2,6 +2,7 @@ use std::{iter::Peekable, str::Chars};
 
 use corpus_classical_logic::ClassicalLogicalExpression;
 use corpus_core::nodes::HashNode;
+use log::{debug, trace};
 
 use crate::{
     PeanoStores,
@@ -143,7 +144,10 @@ impl<'a> Lexer<'a> {
             "EQ" => Some(Token::Eq),
             "PLUS" => Some(Token::Plus),
             "S" => Some(Token::Successor), // 'S' is a keyword for Successor
-            _ => None,                     // parsing error or empty
+            _ => {
+                trace!("Parsed keyword: '{}'", s);
+                None // parsing error or empty
+            }
         }
     }
 }
@@ -207,10 +211,12 @@ impl<'a> PeanoParser<'a> {
         &mut self,
         storage: &PeanoStores,
     ) -> Result<HashNode<PeanoLogicalExpression>, String> {
+        debug!("Parsing proposition...");
         let token = self
             .tokens
             .next()
             .ok_or("Unexpected EOF expecting Proposition")?;
+        trace!("Matched token: {:?}", token);
         match token {
             Token::And => {
                 let left = self.parse_parenthesized(storage, Self::parse_proposition)?;

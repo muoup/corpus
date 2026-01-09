@@ -6,7 +6,8 @@ members = [
 ]
 
 [workspace.dependencies]
-# Shared dependencies will be added here as needed
+log = "0.4"
+env_logger = "0.11"
 
 [workspace.metadata]
 # Build scripts and tooling configuration
