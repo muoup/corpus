@@ -71,13 +71,14 @@ pub fn pa_axiom_rules(stores: &PeanoStores) -> Vec<RewriteRule<PeanoLogicalExpre
             name: "axiom4_additive_successor",
             content: "FORALL (FORALL (FORALL (IMPLIES (EQ (PLUS (/0) (S (/1))) (/2)) (EQ (S (PLUS (/0) (/1))) (/2)))))",
         },
-        // Zero is not the successor of any number: ¬(0 = S(x))
-        // Pattern: EQ(0, S(x)) -> Replacement: False
+        // No variable is the successor of itself: ¬(x = S(x))
+        // Pattern: EQ(x, S(x)) -> Replacement: False
         AxiomFormat {
-            name: "axiom5_zero_is_not_successor",
-            content: "FORALL (NOT (EQ (0) (S (/0))))",
+            name: "axiom5_variable_not_successor_of_self",
+            content: "FORALL (NOT (EQ (/0) (S (/0))))",
         },
-        
+        // Successor equality: if S(x) = S(y), then x = y
+        // Pattern: EQ(S(x), S(y)) -> Replacement: EQ(x, y)
         AxiomFormat {
             name: "axiom6_successor_equality",
             content: "FORALL (FORALL (IMPLIES (EQ (S (/0)) (S (/1))) (EQ (/0) (/1))))",
