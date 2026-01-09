@@ -6,6 +6,7 @@ use corpus_core::base::nodes::{HashNode, Hashing};
 use corpus_core::rewriting::patterns::{AsRewriteRules, Rewritable};
 use corpus_core::{HashNodeInner, RewriteDirection, RewriteRule};
 use std::collections::HashMap;
+use std::fmt::Display;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ClassicalLogicPattern<D: DomainContent>
@@ -30,62 +31,56 @@ where
     D::AsPattern: HashNodeInner,
 {
     match pattern {
-        ClassicalLogicPattern::BooleanConstant(b) => {
-            match expr.value.as_ref() {
-                ClassicalLogicalExpression::BooleanConstant(bt) if bt == b => {
-                    Some(Substitution::new())
-                }
-                _ => None,
+        ClassicalLogicPattern::BooleanConstant(b) => match expr.value.as_ref() {
+            ClassicalLogicalExpression::BooleanConstant(bt) if bt == b => Some(Substitution::new()),
+            _ => None,
+        },
+        ClassicalLogicPattern::Compound { opcode, operands } => match expr.value.as_ref() {
+            ClassicalLogicalExpression::And(l, r)
+                if *opcode == Hashing::opcode("AND") && operands.len() == 2 =>
+            {
+                let mut subst = match_pattern(l, &operands[0], store)?;
+                subst.extend(match_pattern(r, &operands[1], store)?);
+                Some(subst)
             }
-        }
-        ClassicalLogicPattern::Compound { opcode, operands } => {
-            match expr.value.as_ref() {
-                ClassicalLogicalExpression::And(l, r)
-                    if *opcode == Hashing::opcode("AND") && operands.len() == 2 =>
-                {
-                    let mut subst = match_pattern(l, &operands[0], store)?;
-                    subst.extend(match_pattern(r, &operands[1], store)?);
-                    Some(subst)
-                }
-                ClassicalLogicalExpression::Or(l, r)
-                    if *opcode == Hashing::opcode("OR") && operands.len() == 2 =>
-                {
-                    let mut subst = match_pattern(l, &operands[0], store)?;
-                    subst.extend(match_pattern(r, &operands[1], store)?);
-                    Some(subst)
-                }
-                ClassicalLogicalExpression::Not(x)
-                    if *opcode == Hashing::opcode("NOT") && operands.len() == 1 =>
-                {
-                    match_pattern(x, &operands[0], store)
-                }
-                ClassicalLogicalExpression::Imply(l, r)
-                    if *opcode == Hashing::opcode("IMPLY") && operands.len() == 2 =>
-                {
-                    let mut subst = match_pattern(l, &operands[0], store)?;
-                    subst.extend(match_pattern(r, &operands[1], store)?);
-                    Some(subst)
-                }
-                ClassicalLogicalExpression::Iff(l, r)
-                    if *opcode == Hashing::opcode("IFF") && operands.len() == 2 =>
-                {
-                    let mut subst = match_pattern(l, &operands[0], store)?;
-                    subst.extend(match_pattern(r, &operands[1], store)?);
-                    Some(subst)
-                }
-                ClassicalLogicalExpression::ForAll(x)
-                    if *opcode == Hashing::opcode("FORALL") && operands.len() == 1 =>
-                {
-                    match_pattern(x, &operands[0], store)
-                }
-                ClassicalLogicalExpression::Exists(x)
-                    if *opcode == Hashing::opcode("EXISTS") && operands.len() == 1 =>
-                {
-                    match_pattern(x, &operands[0], store)
-                }
-                _ => None,
+            ClassicalLogicalExpression::Or(l, r)
+                if *opcode == Hashing::opcode("OR") && operands.len() == 2 =>
+            {
+                let mut subst = match_pattern(l, &operands[0], store)?;
+                subst.extend(match_pattern(r, &operands[1], store)?);
+                Some(subst)
             }
-        }
+            ClassicalLogicalExpression::Not(x)
+                if *opcode == Hashing::opcode("NOT") && operands.len() == 1 =>
+            {
+                match_pattern(x, &operands[0], store)
+            }
+            ClassicalLogicalExpression::Imply(l, r)
+                if *opcode == Hashing::opcode("IMPLY") && operands.len() == 2 =>
+            {
+                let mut subst = match_pattern(l, &operands[0], store)?;
+                subst.extend(match_pattern(r, &operands[1], store)?);
+                Some(subst)
+            }
+            ClassicalLogicalExpression::Iff(l, r)
+                if *opcode == Hashing::opcode("IFF") && operands.len() == 2 =>
+            {
+                let mut subst = match_pattern(l, &operands[0], store)?;
+                subst.extend(match_pattern(r, &operands[1], store)?);
+                Some(subst)
+            }
+            ClassicalLogicalExpression::ForAll(x)
+                if *opcode == Hashing::opcode("FORALL") && operands.len() == 1 =>
+            {
+                match_pattern(x, &operands[0], store)
+            }
+            ClassicalLogicalExpression::Exists(x)
+                if *opcode == Hashing::opcode("EXISTS") && operands.len() == 1 =>
+            {
+                match_pattern(x, &operands[0], store)
+            }
+            _ => None,
+        },
         ClassicalLogicPattern::DomainPattern(_domain_pattern) => {
             // Domain patterns are handled directly in try_rewrite, not through the generic match/apply system
             // Return None here since domain pattern matching uses a different code path
@@ -247,6 +242,7 @@ fn recompose_logical_operator<D: DomainContent>(
 impl<D: DomainContent + std::fmt::Debug> Rewritable for ClassicalLogicalExpression<D>
 where
     D::AsPattern: Clone + HashNodeInner,
+    D: Display,
 {
     type AsPattern = ClassicalLogicPattern<D>;
     type Storage = LogicalStorage<D>;
@@ -295,7 +291,9 @@ where
             },
             ClassicalLogicalExpression::DomainContent(domain_content) => {
                 ClassicalLogicPattern::DomainPattern(
-                    domain_content.value.decompose_to_pattern(&store.domain_storage),
+                    domain_content
+                        .value
+                        .decompose_to_pattern(&store.domain_storage),
                 )
             }
             ClassicalLogicalExpression::BooleanConstant(b) => {
@@ -311,51 +309,59 @@ where
         to: &Self::AsPattern,
         store: &Self::Storage,
     ) -> Option<HashNode<Self>> {
-        // Special case: if both from and to are DomainPatterns, use domain-level rewriting directly
-        if let (ClassicalLogicPattern::DomainPattern(from_pattern), ClassicalLogicPattern::DomainPattern(to_pattern)) = (from, to) {
-            // We need to match the domain pattern against the domain content
-            let ClassicalLogicalExpression::DomainContent(domain_content) = self else {
-                return None;
-            };
+        match (self, from, to) {
+            (
+                ClassicalLogicalExpression::DomainContent(domain_content),
+                ClassicalLogicPattern::DomainPattern(from_pattern),
+                ClassicalLogicPattern::DomainPattern(to_pattern),
+            ) => {
+                // Use the domain's try_rewrite to match and rewrite at the domain level
+                let rewritten_domain = domain_content.value.try_rewrite(
+                    from_pattern,
+                    to_pattern,
+                    &store.domain_storage,
+                )?;
 
-            // Use the domain's try_rewrite to match and rewrite at the domain level
-            let rewritten_domain = domain_content.value.try_rewrite(from_pattern, to_pattern, &store.domain_storage)?;
+                // Wrap the result back in DomainContent
+                return Some(HashNode::from_store(
+                    ClassicalLogicalExpression::DomainContent(rewritten_domain),
+                    &store.logical_storage,
+                ));
+            }
 
-            // Wrap the result back in DomainContent
-            return Some(HashNode::from_store(
-                ClassicalLogicalExpression::DomainContent(rewritten_domain),
-                &store.logical_storage,
-            ));
-        }
-
-        // Special case: if from is DomainPattern and to is BooleanConstant
-        // Check if domain matches pattern and return the boolean constant
-        if let ClassicalLogicPattern::DomainPattern(from_pattern) = from {
-            if let ClassicalLogicPattern::BooleanConstant(b) = to {
-                let ClassicalLogicalExpression::DomainContent(domain_content) = self else {
-                    return None;
-                };
-
+            (
+                ClassicalLogicalExpression::DomainContent(domain_content),
+                ClassicalLogicPattern::DomainPattern(from_pattern),
+                ClassicalLogicPattern::BooleanConstant(b),
+            ) => {
                 // Use try_rewrite with same pattern to check structural match
                 // If successful, the domain content matches the pattern structure
-                if domain_content.value.try_rewrite(from_pattern, from_pattern, &store.domain_storage).is_some() {
+                if domain_content
+                    .value
+                    .try_rewrite(from_pattern, from_pattern, &store.domain_storage)
+                    .is_some()
+                {
                     return Some(HashNode::from_store(
                         ClassicalLogicalExpression::BooleanConstant(*b),
                         &store.logical_storage,
                     ));
                 }
+                
+                None
+            }
+
+            _ => {
+                // Standard case: use generic pattern matching and substitution
+                // Match 'from' pattern against self to get substitution
+                let substitution = match_pattern(
+                    &HashNode::from_store(self.clone(), &store.logical_storage),
+                    from,
+                    store,
+                )?;
+                // Apply substitution to 'to' pattern to get result
+                apply_substitution(to, &substitution, store)
             }
         }
-
-        // Standard case: use generic pattern matching and substitution
-        // Match 'from' pattern against self to get substitution
-        let substitution = match_pattern(
-            &HashNode::from_store(self.clone(), &store.logical_storage),
-            from,
-            store,
-        )?;
-        // Apply substitution to 'to' pattern to get result
-        apply_substitution(to, &substitution, store)
     }
 
     fn get_recursive_rewrites(
@@ -393,25 +399,9 @@ where
                 }
             }
 
-            ClassicalLogicalExpression::DomainContent(domain_content) => {
-                // Recursively try rewriting at the domain level
-                // This allows arithmetic rules to be applied to operands of equality expressions
-
-                // Extract domain patterns from the logical patterns (if they are DomainPattern variants)
-                let (domain_from, domain_to) = match (from, to) {
-                    (ClassicalLogicPattern::DomainPattern(df), ClassicalLogicPattern::DomainPattern(dt)) => (Some(df), Some(dt)),
-                    _ => (None, None),
-                };
-
-                // If we have domain patterns, use them for domain-level rewriting
-                if let (Some(df), Some(dt)) = (domain_from, domain_to) {
-                    for domain_rewrite in domain_content.value.get_recursive_rewrites(df, dt, &store.domain_storage) {
-                        rewrites.push(HashNode::from_store(
-                            ClassicalLogicalExpression::DomainContent(domain_rewrite),
-                            &store.logical_storage,
-                        ));
-                    }
-                }
+            ClassicalLogicalExpression::DomainContent(..) => {
+                // Rewrite rules cannot exist at the domain level as domain-level reasoning exists outside the scope
+                // of boolean 'truthiness'. Thus, we do not perform recursive rewrites into domain content.
             }
 
             ClassicalLogicalExpression::BooleanConstant(_) => {}
@@ -425,6 +415,7 @@ where
 impl<D: DomainContent + std::fmt::Debug> AsRewriteRules for ClassicalLogicalExpression<D>
 where
     D::AsPattern: Clone + HashNodeInner,
+    D: Display,
 {
     fn decompose_to_rewrite_rules(
         &self,
@@ -466,7 +457,6 @@ where
 
             ClassicalLogicalExpression::And(..)
             | ClassicalLogicalExpression::Or(..)
-            | ClassicalLogicalExpression::Not(..)
             | ClassicalLogicalExpression::ForAll(..)
             | ClassicalLogicalExpression::BooleanConstant(_) => {
                 let (_, operands) = decompose_logical_operator(self);
@@ -477,10 +467,25 @@ where
                 }
             }
 
+            ClassicalLogicalExpression::Not(inner) => {
+                let inner = inner.value.decompose_to_pattern(store);
+                let truth_false = ClassicalLogicalExpression::BooleanConstant(BinaryTruth::False)
+                    .decompose_to_pattern(store);
+
+                rewrites.push(RewriteRule::new(
+                    name,
+                    inner,
+                    truth_false,
+                    RewriteDirection::Forward,
+                ))
+            }
+
             ClassicalLogicalExpression::DomainContent(domain_content) => {
                 // Generate a rewrite rule that maps the domain pattern to true
                 // This allows axioms like reflexivity (EQ x x) to match and rewrite to true
-                let domain_pattern = domain_content.value.decompose_to_pattern(&store.domain_storage);
+                let domain_pattern = domain_content
+                    .value
+                    .decompose_to_pattern(&store.domain_storage);
                 let true_pattern = ClassicalLogicPattern::BooleanConstant(BinaryTruth::True);
 
                 rewrites.push(RewriteRule::new(
@@ -489,8 +494,8 @@ where
                     true_pattern,
                     RewriteDirection::Forward,
                 ));
-            } 
-            
+            }
+
             ClassicalLogicalExpression::_phantom(..) => unreachable!(),
         }
 

@@ -15,12 +15,12 @@ use std::fmt::Display;
 ///
 /// Implementations define how to estimate the "cost" or "distance to goal" for
 /// an expression. Lower costs indicate states that should be explored first.
-pub trait CostEstimator<T: HashNodeInner> {
+pub trait CostEstimator<T: Rewritable> {
     /// Estimate the cost of an expression (distance to goal).
     ///
     /// Lower values indicate the expression is "closer" to a goal and should be
     /// prioritized in the A* search.
-    fn estimate_cost(&self, expr: &HashNode<T>) -> u64;
+    fn estimate_cost(&self, previous_state: Option<&ProofState<T>>, expr: &HashNode<T>) -> u64;
 }
 
 /// Trait for domain-specific goal checking.
@@ -126,7 +126,7 @@ impl<
         let mut visited = HashSet::new();
         let mut nodes_explored = 0usize;
 
-        let initial_cost = self.cost_estimator.estimate_cost(&initial_expr);
+        let initial_cost = self.cost_estimator.estimate_cost(None, &initial_expr);
         let initial_state = ProofState {
             expr: initial_expr,
             steps: Vec::new(),
@@ -160,10 +160,12 @@ impl<
             for rule in self.rules.iter() {
                 // Try to apply this rule to the current expression (including recursive rewrites)
                 let rewrites = rule.apply_recursive(&state.expr, store);
-                // println!("Rule {} generated {} rewrites for {}", rule.name, rewrites.len(), state.expr);
+                if !rewrites.is_empty() {
+                    println!("Rule {} generated {} rewrites for {}", rule.name, rewrites.len(), state.expr);
+                }
                 for rewritten in rewrites {
-                    // println!("  -> {}", rewritten);
-                    let cost = self.cost_estimator.estimate_cost(&rewritten);
+                    println!("  -> {}", rewritten);
+                    let cost = self.cost_estimator.estimate_cost(Some(&state), &rewritten);
 
                     heap.push(ProofState {
                         expr: rewritten.clone(),
@@ -217,9 +219,14 @@ impl<T: Rewritable> Ord for ProofState<T> {
 /// expressions first as they likely indicate simpler forms.
 pub struct SizeCostEstimator;
 
-impl<T: HashNodeInner> CostEstimator<T> for SizeCostEstimator {
-    fn estimate_cost(&self, expr: &HashNode<T>) -> u64 {
-        expr.size()
+impl<T: Rewritable> CostEstimator<T> for SizeCostEstimator {
+    fn estimate_cost(&self, previous_state: Option<&ProofState<T>>, expr: &HashNode<T>) -> u64 {
+        let expr_size = expr.size();
+        let path_length = previous_state
+            .map(|s| s.steps.len())
+            .unwrap_or(0) as u64;
+        
+        path_length + expr_size
     }
 }
 

@@ -335,7 +335,7 @@ impl Rewritable for PeanoDomainExpression {
 impl fmt::Display for PeanoArithmeticExpression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PeanoArithmeticExpression::Add(left, right) => write!(f, "({} + {})", left, right),
+            PeanoArithmeticExpression::Add(left, right) => write!(f, "{} + {}", left, right),
             PeanoArithmeticExpression::Successor(inner) => write!(f, "S({})", inner),
             PeanoArithmeticExpression::Number(n) => write!(f, "{}", n),
             PeanoArithmeticExpression::DeBruijn(idx) => write!(f, "/{}", idx),
@@ -346,7 +346,7 @@ impl fmt::Display for PeanoArithmeticExpression {
 impl fmt::Display for PeanoDomainExpression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PeanoDomainExpression::Equality(left, right) => write!(f, "EQ {} {}", left, right),
+            PeanoDomainExpression::Equality(left, right) => write!(f, "{} = {}", left, right),
         }
     }
 }

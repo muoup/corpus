@@ -17,7 +17,7 @@ fn main() {
     println!("Parsing theorem: {}", theorem);
 
     let mut parser = PeanoParser::new(theorem);
-    let mut stores = peano_arithmetic::PeanoStores::new();
+    let stores = peano_arithmetic::PeanoStores::new();
     
     match parser.parse_proposition(&stores) {
         Ok(proposition) => {
@@ -31,12 +31,6 @@ fn main() {
             let mut prover: Prover<PeanoLogicalExpression, SizeCostEstimator, BinaryTruth, _> =
                 Prover::new(10000, SizeCostEstimator, goal_checker);
 
-            // Load arithmetic rewrite rules into storage
-            let arithmetic_rules = axioms::pa_arithmetic_rules();
-            for rule in arithmetic_rules {
-                stores.pa_storage_mut().add_arithmetic_rule(rule);
-            }
-
             // Load Peano Arithmetic axioms as rewrite rules
             let axiom_rules = axioms::pa_axiom_rules(&stores);
             prover.add_rules(axiom_rules);
@@ -45,7 +39,11 @@ fn main() {
             match prover.prove(&stores.storage, proposition) {
                 Some(result) => {
                     println!();
-                    println!("✓ Theorem proved!");
+                    
+                    match result.truth_result {
+                        BinaryTruth::True => println!("✓ Theorem proved!"),
+                        BinaryTruth::False => println!("✗ Theorem disproved!"),
+                    };
 
                     // Print the rewrite path
                     println!();
@@ -59,7 +57,7 @@ fn main() {
                 }
                 None => {
                     println!();
-                    println!("✗ Could not prove theorem (reached limit)");
+                    println!("? No conclusion found (max search depth reached)");
                 }
             }
         }

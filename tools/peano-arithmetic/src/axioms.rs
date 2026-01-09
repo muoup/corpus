@@ -6,12 +6,11 @@
 use crate::{
     PeanoStores,
     parsing::PeanoParser,
-    syntax::{PeanoArithmeticExpression, PeanoArithmeticPattern, PeanoLogicalExpression},
+    syntax::PeanoLogicalExpression,
 };
 use corpus_classical_logic::BinaryTruth;
 use corpus_core::{
     RewriteDirection,
-    nodes::Hashing,
     rewriting::{
         RewriteRule,
         patterns::{AsRewriteRules, Rewritable},
@@ -48,10 +47,14 @@ struct AxiomFormat {
 /// - Each equality becomes a bidirectional rewrite rule
 pub fn pa_axiom_rules(stores: &PeanoStores) -> Vec<RewriteRule<PeanoLogicalExpression>> {
     let axioms = vec![
+        // Reflexivity: x = x
+        // Pattern: EQ(x, x) -> Replacement: True
         AxiomFormat {
             name: "axiom1_reflexivity",
             content: "FORALL (EQ (/0) (/0))",
         },
+        // Symmetry: if x = y, then y = x
+        // Pattern: EQ(x, y) -> Replacement: EQ(y, x)
         AxiomFormat {
             name: "axiom2_symmetry",
             content: "FORALL (FORALL (IMPLIES (EQ (/0) (/1)) (EQ (/1) (/0))))",
@@ -68,6 +71,17 @@ pub fn pa_axiom_rules(stores: &PeanoStores) -> Vec<RewriteRule<PeanoLogicalExpre
             name: "axiom4_additive_successor",
             content: "FORALL (FORALL (FORALL (IMPLIES (EQ (PLUS (/0) (S (/1))) (/2)) (EQ (S (PLUS (/0) (/1))) (/2)))))",
         },
+        // Zero is not the successor of any number: ¬(0 = S(x))
+        // Pattern: EQ(0, S(x)) -> Replacement: False
+        AxiomFormat {
+            name: "axiom5_zero_is_not_successor",
+            content: "FORALL (NOT (EQ (0) (S (/0))))",
+        },
+        
+        AxiomFormat {
+            name: "axiom6_successor_equality",
+            content: "FORALL (FORALL (IMPLIES (EQ (S (/0)) (S (/1))) (EQ (/0) (/1))))",
+        }
     ];
 
     axioms
@@ -98,59 +112,4 @@ pub(crate) fn generate_axiom_rewrites(
     ));
 
     pattern
-}
-
-/// Generate arithmetic rewrite rules for Peano Arithmetic.
-///
-/// These rules rewrite arithmetic expressions independently of domain context.
-/// They are applied to the operands of equality expressions during recursive rewriting.
-///
-/// # Rules
-///
-/// 1. **Additive identity**: `x + 0 -> x`
-/// 2. **Additive successor**: `x + S(y) -> S(x + y)`
-///
-/// # Examples
-///
-/// When proving `EQ (S(PLUS (0) (0))) (S (0))`:
-/// - The arithmetic rules are applied to the left operand `S(PLUS (0) (0))`
-/// - `PLUS (0) (0)` rewrites to `0` (additive identity)
-/// - Result: `S(0)`, which equals the right side `S(0)`
-pub fn pa_arithmetic_rules() -> Vec<RewriteRule<PeanoArithmeticExpression>> {
-    use PeanoArithmeticPattern::*;
-
-    vec![
-        // Additive identity: x + 0 -> x
-        RewriteRule::new(
-            "arithmetic_additive_identity",
-            Compound {
-                opcode: Hashing::opcode("add"),
-                args: vec![Variable(0), Literal(0)],
-            },
-            Variable(0),
-            RewriteDirection::Forward,
-        ),
-        // Additive successor: x + S(y) -> S(x + y)
-        RewriteRule::new(
-            "arithmetic_additive_successor",
-            Compound {
-                opcode: Hashing::opcode("add"),
-                args: vec![
-                    Variable(0),
-                    Compound {
-                        opcode: Hashing::opcode("successor"),
-                        args: vec![Variable(1)],
-                    },
-                ],
-            },
-            Compound {
-                opcode: Hashing::opcode("successor"),
-                args: vec![Compound {
-                    opcode: Hashing::opcode("add"),
-                    args: vec![Variable(0), Variable(1)],
-                }],
-            },
-            RewriteDirection::Forward,
-        ),
-    ]
 }

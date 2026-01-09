@@ -160,8 +160,8 @@ where
             Self::Not(x) => write!(f, "¬{}", x),
             Self::Imply(l, r) => write!(f, "({} → {})", l, r),
             Self::Iff(l, r) => write!(f, "({} ↔ {})", l, r),
-            Self::ForAll(x) => write!(f, "∀{}", x),
-            Self::Exists(x) => write!(f, "∃{}", x),
+            Self::ForAll(x) => write!(f, "∀ ({})", x),
+            Self::Exists(x) => write!(f, "∃ ({})", x),
 
             Self::BooleanConstant(b) => write!(f, "{}", b),
             Self::DomainContent(d) => write!(f, "{}", d),

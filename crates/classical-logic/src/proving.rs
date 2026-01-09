@@ -119,6 +119,7 @@ where
             // One main observation of classical logic is maybe best summarized as:
             // "Things which are true, are true; and things which are false, are false."
             ClassicalLogicalExpression::BooleanConstant(truth) => Some(*truth),
+            ClassicalLogicalExpression::ForAll(inner) => self.check(inner),
 
             // Otherwise who's to say
             _ => None,
