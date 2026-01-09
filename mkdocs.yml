@@ -1,0 +1,52 @@
+site_name: Corpus - Logical Grammar & Rewriting Systems
+site_description: Unified grammars, axiom systems, and rewriting engines
+site_author: Corpus Project
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Infrastructure:
+    - Overview: infrastructure/overview.md
+    - Crates: infrastructure/crates.md
+    - Design Principles: infrastructure/design-principles.md
+  - Research:
+    - Research Index: research/index.md
+    - Unified Grammar: research/unified-grammar.md
+  - Usage:
+    - Getting Started: usage/getting-started.md
+    - Logging: usage/logging.md
+    - Examples: usage/examples.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - admonition
